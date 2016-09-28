@@ -48,12 +48,18 @@ func (m *MySQLMetaStore) Close() {
 Oid finder - returns a []*MetaObject
 */
 func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
-	rows, _ := m.client.Query("select oid, size from oids;")
+	rows, err := m.client.Query("select oid, size from oids;")
+	if err != nil {
+		logger.Log(kv{"fn": "MySQLMetaStore.findAllOids", "msg": err})
+		return nil, err
+	}
+	defer rows.Close()
 
-	var oid string
-	var size int64
-
-	var oidList []*MetaObject
+	var (
+		oid     string
+		size    int64
+		oidList []*MetaObject
+	)
 
 	for rows.Next() {
 		err := rows.Scan(&oid, &size)
@@ -63,7 +69,6 @@ func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
 		oidList = append(oidList, &MetaObject{Oid: oid, Size: size})
 	}
 
-	defer rows.Close()
 	return oidList, nil
 }
 
@@ -72,16 +77,16 @@ OID Maps
 */
 func (m *MySQLMetaStore) mapOid(id int64) ([]string, error) {
 	rows, err := m.client.Query("select oid from oid_maps where projectID = ?", id)
-
-	var (
-		oid string
-	)
-	var oidList []string
-
 	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.mapOid", "msg": fmt.Sprintf("Oid not found %s", err)})
+		logger.Log(kv{"fn": "MySQLMetaStore.mapOid", "msg": err})
 		return nil, err
 	}
+	defer rows.Close()
+
+	var (
+		oid     string
+		oidList []string
+	)
 
 	for rows.Next() {
 		err := rows.Scan(&oid)
@@ -91,7 +96,6 @@ func (m *MySQLMetaStore) mapOid(id int64) ([]string, error) {
 		}
 		oidList = append(oidList, oid)
 	}
-	defer rows.Close()
 
 	return oidList, nil
 }
