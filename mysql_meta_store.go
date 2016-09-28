@@ -58,7 +58,7 @@ func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
 	for rows.Next() {
 		err := rows.Scan(&oid, &size)
 		if err != nil {
-			logger.Log(kv{"fn": "findProject", "msg": err})
+			logger.Log(kv{"fn": "MySQLMetaStore.findAllOids", "msg": err})
 		}
 		oidList = append(oidList, &MetaObject{Oid: oid, Size: size})
 	}
@@ -79,14 +79,14 @@ func (m *MySQLMetaStore) mapOid(id int64) ([]string, error) {
 	var oidList []string
 
 	if err != nil {
-		logger.Log(kv{"fn": "findProject", "msg": fmt.Sprintf("Oid not found %s", err)})
+		logger.Log(kv{"fn": "MySQLMetaStore.mapOid", "msg": fmt.Sprintf("Oid not found %s", err)})
 		return nil, err
 	}
 
 	for rows.Next() {
 		err := rows.Scan(&oid)
 		if err != nil {
-			logger.Log(kv{"fn": "findProject", "msg": err})
+			logger.Log(kv{"fn": "MySQLMetaStore.mapOid", "msg": err})
 			return nil, err
 		}
 		oidList = append(oidList, oid)
@@ -134,7 +134,7 @@ func (m *MySQLMetaStore) findAllProjects() ([]*MetaProject, error) {
 func (m *MySQLMetaStore) createProject(name string) error {
 	_, err := m.client.Exec("insert into projects (name) values (?)", name)
 	if err != nil {
-		logger.Log(kv{"fn": "createProject", "msg": fmt.Sprintf("MySQL insert query failed with error %s", err)})
+		logger.Log(kv{"fn": "MySQLMetaStore.createProject", "msg": fmt.Sprintf("MySQL insert query failed with error %s", err)})
 		return err
 	}
 	return nil
@@ -356,7 +356,7 @@ return meta object
 func (m *MySQLMetaStore) Objects() ([]*MetaObject, error) {
 	ao, err := m.findAllOids()
 	if err != nil {
-		logger.Log(kv{"fn": "mysql_meta_store", "msg": err.Error()})
+		logger.Log(kv{"fn": "MySQLMetaStore.Objects", "msg": err.Error()})
 	}
 	return ao, err
 }
@@ -368,7 +368,7 @@ return meta project object
 func (m *MySQLMetaStore) Projects() ([]*MetaProject, error) {
 	ao, err := m.findAllProjects()
 	if err != nil {
-		logger.Log(kv{"fn": "mysql_meta_store", "msg": err.Error()})
+		logger.Log(kv{"fn": "MySQLMetaStore.Projects", "msg": err.Error()})
 	}
 	return ao, err
 }
@@ -392,7 +392,7 @@ func (m *MySQLMetaStore) authenticate(authorization string) bool {
 
 	c, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(authorization, "Basic "))
 	if err != nil {
-		logger.Log(kv{"fn": "mysql_meta_store.authenticate", "msg": err.Error()})
+		logger.Log(kv{"fn": "MySQLMetaStore.authenticate", "msg": err.Error()})
 		return false
 	}
 	cs := string(c)
@@ -406,7 +406,7 @@ func (m *MySQLMetaStore) authenticate(authorization string) bool {
 		return authenticateLdap(user, password)
 	}
 
-	logger.Log(kv{"fn": "mysql_meta_store", "msg": "Authentication failed, please make sure LDAP is set to true"})
+	logger.Log(kv{"fn": "MySQLMetaStore.authenticate", "msg": "Authentication failed, please make sure LDAP is set to true"})
 	return false
 
 }
