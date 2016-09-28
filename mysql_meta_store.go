@@ -100,39 +100,33 @@ func (m *MySQLMetaStore) mapOid(id int64) ([]string, error) {
 Project finder - returns a []*MetaProject
 */
 func (m *MySQLMetaStore) findAllProjects() ([]*MetaProject, error) {
-	count, err := m.client.Query("select count(*) as count from projects")
-	var c int
-	for count.Next() {
-		err = count.Scan(&c)
-
-		if err != nil || c == 0 {
-			return nil, nil
-		}
-	}
-
 	rows, err := m.client.Query("select id, name from projects")
-
-	var name string
-	var id int64
-
-	var projectList []*MetaProject
-
-	for rows.Next() {
-		err = rows.Scan(&id, &name)
-
-		if err != nil {
-			logger.Log(kv{"fn": "findProject", "msg": err})
-		}
-
-		oid, _ := m.mapOid(id)
-		projectList = append(projectList, &MetaProject{Name: name, Oids: oid})
+	if err != nil {
+		return nil, err
 	}
-
 	defer rows.Close()
 
-	if len(projectList) == 0 {
-		return nil, errProjectNotFound
+	var (
+		name        string
+		id          int64
+		projectList []*MetaProject
+	)
+
+	for rows.Next() {
+		err := rows.Scan(&id, &name)
+		if err != nil {
+			logger.Log(kv{"fn": "MySQLMetaStore.findAllProjects", "msg": err})
+		}
+
+		oids, err := m.mapOid(id)
+		if err != nil {
+			logger.Log(kv{"fn": "MySQLMetaStore.findAllProjects", "msg": err})
+			return nil, err
+		}
+
+		projectList = append(projectList, &MetaProject{Name: name, Oids: oids})
 	}
+
 	return projectList, nil
 }
 
