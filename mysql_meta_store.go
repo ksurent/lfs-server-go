@@ -146,15 +146,25 @@ func (m *MySQLMetaStore) createProject(name string) error {
 	return nil
 }
 
-// Create oid
-func (m *MySQLMetaStore) createOid(oid string, size int64) error {
-	_, err := m.client.Exec("insert into oids (oid, size) values (?, ?)", oid, size)
-
+// Transactionally commit pending object and create/update all dependent data
+func (m *MySQLMetaStore) commitPendingObject(meta *MetaObject) error {
+	tx, err := m.client.Begin()
 	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.createOid", "msg": err})
-		return nil
+		logger.Log(kv{"fn": "MySQLMetaStore", "msg": "Could not start a transaction: " + err.Error()})
+		return err
 	}
-	return nil
+
+	// move from pending to committed
+	tx.Exec("insert into "+MySQLCommittedTable+" (oid, size) values (?, ?)", meta.Oid, meta.Size)
+	tx.Exec("delete from "+MySQLPendingTable+" where oid = ?", meta.Oid)
+
+	// create projects if needed and update oid -> project relations
+	for _, name := range meta.ProjectNames {
+		tx.Exec("insert ignore into projects (name) values (?)", name)
+		tx.Exec("insert into oid_maps (oid, projectID) values (?, ?)", meta.Oid, name)
+	}
+
+	return tx.Commit()
 }
 
 // Create pending oid
@@ -166,79 +176,6 @@ func (m *MySQLMetaStore) createPendingOid(oid string, size int64) error {
 		return nil
 	}
 	return nil
-}
-
-// Remove pending oid
-func (m *MySQLMetaStore) removePendingOid(oid string) error {
-	_, err := m.client.Exec("delete from pending_oids where oid = ?", oid)
-
-	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.removePendingOid", "msg": err})
-		return nil
-	}
-	return nil
-}
-
-// Find project
-func (m *MySQLMetaStore) findProject(projectName string) (*MetaProject, error) {
-	if projectName == "" {
-		return nil, errProjectNotFound
-	}
-
-	var project MetaProject
-	var (
-		id  int64
-		oid string
-	)
-
-	// Get projectname and its ids
-	err := m.client.QueryRow("select * from projects where name = ?", projectName).Scan(&id, &project.Name)
-
-	if err != nil {
-		logger.Log(kv{"fn": "findProject", "msg": fmt.Sprintf("Project not found %s", err)})
-		return nil, err
-	}
-
-	// get oids
-	rows, err := m.client.Query("select oid from oid_maps where projectID = ?", id)
-
-	if err != nil {
-		logger.Log(kv{"fn": "findProject", "msg": fmt.Sprintf("Oid not found %s", err)})
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		err = rows.Scan(&oid)
-		if err != nil {
-			logger.Log(kv{"fn": "findProject", "msg": err})
-		}
-		project.Oids = append(project.Oids, oid)
-	}
-
-	err = rows.Err()
-	if err != nil {
-		logger.Log(kv{"fn": "findProject", "msg": fmt.Sprintf("Error while looping through rows %s", err)})
-	}
-
-	if project.Name == "" {
-		return nil, errProjectNotFound
-	}
-	logger.Log(kv{"fn": "findProject", "msg": fmt.Sprintf("Project %s", &project)})
-	return &project, nil
-}
-
-// Add oid to project
-func (m *MySQLMetaStore) addOidToProject(oid string, project string) error {
-	// Cannot bind on collections
-	var (
-		id   int64
-		name string
-	)
-	err := m.client.QueryRow("select id, name from projects where name = ?", project).Scan(&id, &name)
-	_, err = m.client.Exec("insert into oid_maps (oid, projectID) values (?, ?)", oid, id)
-	logger.Log(kv{"fn": "addOidToProject", "msg": err})
-	return err
 }
 
 func (m *MySQLMetaStore) findPendingOid(oid string) (*MetaObject, error) {
@@ -330,10 +267,7 @@ func (m *MySQLMetaStore) Commit(v *RequestVars) (*MetaObject, error) {
 }
 
 func (m *MySQLMetaStore) doPut(meta *MetaObject) error {
-
 	if !meta.Existing {
-		// Creating pending object
-
 		if err := m.createPendingOid(meta.Oid, meta.Size); err != nil {
 			return err
 		}
@@ -341,31 +275,7 @@ func (m *MySQLMetaStore) doPut(meta *MetaObject) error {
 		return nil
 	}
 
-	// Committing pending object
-
-	if err := m.removePendingOid(meta.Oid); err != nil {
-		return err
-	}
-
-	// TODO transform this into a transaction
-
-	if err := m.createOid(meta.Oid, meta.Size); err != nil {
-		return err
-	}
-
-	for _, project := range meta.ProjectNames {
-		if _, err := m.findProject(project); err != nil {
-			if err = m.createProject(project); err != nil {
-				return err
-			}
-		}
-
-		if err := m.addOidToProject(meta.Oid, project); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return m.commitPendingObject(meta)
 }
 
 func (m *MySQLMetaStore) Get(v *RequestVars) (*MetaObject, error) {
