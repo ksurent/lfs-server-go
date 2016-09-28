@@ -333,8 +333,7 @@ func (m *MySQLMetaStore) AddUser(user, pass string) error {
 AddProject (Add a new project)
 */
 func (m *MySQLMetaStore) AddProject(name string) error {
-	err := m.createProject(name)
-	return err
+	return m.createProject(name)
 }
 
 /*
@@ -358,11 +357,7 @@ Objects (get all oids)
 return meta object
 */
 func (m *MySQLMetaStore) Objects() ([]*MetaObject, error) {
-	ao, err := m.findAllOids()
-	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.Objects", "msg": err.Error()})
-	}
-	return ao, err
+	return m.findAllOids()
 }
 
 /*
@@ -370,11 +365,7 @@ Projects (get all projects)
 return meta project object
 */
 func (m *MySQLMetaStore) Projects() ([]*MetaProject, error) {
-	ao, err := m.findAllProjects()
-	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.Projects", "msg": err.Error()})
-	}
-	return ao, err
+	return m.findAllProjects()
 }
 
 /*
