@@ -14,11 +14,11 @@ import (
 const (
 	contentMediaType = "application/vnd.git-lfs"
 	metaMediaType    = contentMediaType + "+json"
-	version          = "0.1.0"
 )
 
 var (
-	logger = NewKVLogger(os.Stdout)
+	logger       = NewKVLogger(os.Stdout)
+	BuildVersion = "0.1.0"
 )
 
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
@@ -90,7 +90,7 @@ func findContentStore() (GenericContentStore, error) {
 }
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "-v" {
-		fmt.Println(version)
+		fmt.Println(BuildVersion)
 		os.Exit(0)
 	}
 
@@ -138,7 +138,7 @@ func main() {
 		}
 	}(c, tl)
 
-	logger.Log(kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": Config.Listen, "version": version})
+	logger.Log(kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": Config.Listen, "version": BuildVersion})
 
 	app := NewApp(contentStore, metaStore)
 	app.Serve(listener)
