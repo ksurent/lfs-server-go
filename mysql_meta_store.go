@@ -34,8 +34,7 @@ func NewMySQLMetaStore(mysqlService ...*MySQLService) (*MySQLMetaStore, error) {
 Close (method close mysql connection)
 */
 func (m *MySQLMetaStore) Close() {
-	defer m.client.Close()
-	return
+	m.client.Close()
 }
 
 // Find all committed meta objects (called from the management interface)
