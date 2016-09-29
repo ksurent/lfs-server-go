@@ -29,7 +29,7 @@ func TestMySQLAddProjects(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	err := metaStoreTestMySQL.AddProject(testRepo)
+	err := metaStoreTestMySQL.AddProject(extraRepo)
 
 	if err != nil {
 		t.Errorf("expected AddProject to succeed, got : %s", err)
