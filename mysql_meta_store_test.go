@@ -42,7 +42,18 @@ func TestMySQLPutWithAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	meta, err := metaStoreTestMySQL.Put(&RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
+	rvPut := &RequestVars{
+		Authorization: testAuth,
+		Oid:           nonexistingOid,
+		Size:          42,
+		Repo:          testRepo,
+	}
+	rvGet := &RequestVars{
+		Authorization: testAuth,
+		Oid:           nonexistingOid,
+	}
+
+	meta, err := metaStoreTestMySQL.Put(rvPut)
 	if err != nil {
 		t.Errorf("expected put to succeed, got: %s", err)
 	}
@@ -51,14 +62,14 @@ func TestMySQLPutWithAuth(t *testing.T) {
 		t.Errorf("expected meta to not have existed")
 	}
 
-	_, err = metaStoreTestMySQL.Get(&RequestVars{Authorization: testAuth, Oid: nonexistingOid})
+	_, err = metaStoreTestMySQL.Get(rvGet)
 	if err == nil {
 		t.Errorf("expected new put to not be committed yet")
 	}
 
-	meta, err = metaStoreTestMySQL.GetPending(&RequestVars{Authorization: testAuth, Oid: nonexistingOid})
+	meta, err = metaStoreTestMySQL.GetPending(rvGet)
 	if err != nil {
-		t.Errorf("expected new put to be pending, got: %s", err)
+		t.Errorf("expected new put to be pending")
 	}
 
 	if meta.Oid != nonexistingOid {
@@ -69,7 +80,7 @@ func TestMySQLPutWithAuth(t *testing.T) {
 		t.Errorf("expected sizes to match, got: %d", meta.Size)
 	}
 
-	meta, err = metaStoreTestMySQL.Commit(&RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
+	meta, err = metaStoreTestMySQL.Commit(rvPut)
 	if err != nil {
 		t.Errorf("expected commit to succeed, got: %s", err)
 	}
@@ -78,16 +89,16 @@ func TestMySQLPutWithAuth(t *testing.T) {
 		t.Errorf("expected existing to become true after commit")
 	}
 
-	_, err = metaStoreTestMySQL.Get(&RequestVars{Authorization: testAuth, Oid: nonexistingOid})
+	_, err = metaStoreTestMySQL.Get(rvGet)
 	if err != nil {
-		t.Errorf("expected new put to be committed now, got: %s", err)
+		t.Errorf("expected new put to be committed now")
 	}
 
 	if !meta.Existing {
 		t.Errorf("expected existing to be true for a committed object")
 	}
 
-	meta, err = metaStoreTestMySQL.Put(&RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
+	meta, err = metaStoreTestMySQL.Put(rvPut)
 	if err != nil {
 		t.Errorf("expected putting an duplicate object to succeed, got: %s", err)
 	}
@@ -103,12 +114,23 @@ func TestMySQLPutWithoutAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	_, err := metaStoreTestMySQL.Put(&RequestVars{Authorization: badAuth, User: testUser, Oid: contentOid, Size: 42})
+	_, err := metaStoreTestMySQL.Put(&RequestVars{
+		Authorization: badAuth,
+		User:          testUser,
+		Oid:           contentOid,
+		Size:          42,
+		Repo:          testRepo,
+	})
 	if !isAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
-	_, err = metaStoreTestMySQL.Put(&RequestVars{User: testUser, Oid: contentOid, Size: 42, Repo: testRepo})
+	_, err = metaStoreTestMySQL.Put(&RequestVars{
+		User: testUser,
+		Oid:  contentOid,
+		Size: 42,
+		Repo: testRepo,
+	})
 	if !isAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
