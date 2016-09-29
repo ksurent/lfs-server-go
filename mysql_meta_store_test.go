@@ -180,7 +180,6 @@ func setupMySQLMeta() error {
 	mysqlStore.client.Exec("TRUNCATE TABLE oid_maps")
 	mysqlStore.client.Exec("TRUNCATE TABLE oids")
 	mysqlStore.client.Exec("TRUNCATE TABLE projects")
-	mysqlStore.client.Exec("TRUNCATE TABLE pending_oids")
 
 	rv := &RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize, Repo: testRepo}
 

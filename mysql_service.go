@@ -20,16 +20,18 @@ type MySQLService struct {
 Projects table struct
 */
 type Projects struct {
-	id   int64
-	name string
+	id      int64
+	name    string
+	pending bool
 }
 
 /*
 Oids table struct
 */
 type Oids struct {
-	oid  string
-	size int64
+	oid     string
+	size    int64
+	pending bool
 }
 
 /*
@@ -71,7 +73,6 @@ func NewMySQLSession() *MySQLService {
 func createTables(client *gorp.DbMap) error {
 	client.AddTableWithName(Projects{}, "projects").SetKeys(true, "id").ColMap("name").SetUnique(true)
 	client.AddTableWithName(Oids{}, "oids").SetKeys(false, "oid")
-	client.AddTableWithName(Oids{}, "pending_oids").SetKeys(false, "oid")
 	client.AddTableWithName(OidMaps{}, "oid_maps")
 	err := client.CreateTablesIfNotExists()
 
