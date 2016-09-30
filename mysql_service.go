@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"gopkg.in/gorp.v1"
 	"strings"
 )
 
@@ -17,32 +16,6 @@ type MySQLService struct {
 }
 
 /*
-Projects table struct
-*/
-type Projects struct {
-	id      int64
-	name    string
-	pending bool
-}
-
-/*
-Oids table struct
-*/
-type Oids struct {
-	oid     string
-	size    int64
-	pending bool
-}
-
-/*
-OidMaps table struct
-*/
-type OidMaps struct {
-	oid       string
-	projectID int64
-}
-
-/*
 NewMySQLSession (method used in mysql_meta_store.go)
 create requeired table and return sql client object
 */
@@ -51,18 +24,21 @@ func NewMySQLSession() *MySQLService {
 	validate := validateConfig()
 
 	if validate {
-		// Create MySQL Client
-		dqs := fmt.Sprintf("%s:%s@tcp(%s)/%s",
+		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s",
 			Config.MySQL.Username,
 			Config.MySQL.Password,
 			Config.MySQL.Host,
 			Config.MySQL.Database)
 
-		// Open connection
-		db, err := sql.Open("mysql", dqs)
-		dbMap := &gorp.DbMap{Db: db, Dialect: gorp.MySQLDialect{"InnoDB", "UTF8"}}
-		perror(createTables(dbMap))
-		perror(err)
+		db, err := sql.Open("mysql", dsn)
+		if err != nil {
+			return &MySQLService{Fail: true}
+		}
+
+		if err := createTables(db); err != nil {
+			return &MySQLService{Fail: true}
+		}
+
 		return &MySQLService{Client: db}
 	}
 
@@ -70,16 +46,45 @@ func NewMySQLSession() *MySQLService {
 	return &MySQLService{Fail: true}
 }
 
-func createTables(client *gorp.DbMap) error {
-	client.AddTableWithName(Projects{}, "projects").SetKeys(true, "id").ColMap("name").SetUnique(true)
-	client.AddTableWithName(Oids{}, "oids").SetKeys(false, "oid")
-	client.AddTableWithName(OidMaps{}, "oid_maps")
-	err := client.CreateTablesIfNotExists()
-
+func createTables(db *sql.DB) error {
+	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
-	return nil
+
+	tx.Exec(`
+		create table if not exists
+			projects(
+				id int not null auto_increment primary key,
+				name varchar(255) not null unique,
+				pending tinyint(1) unsigned not null default 1
+			)
+		engine=innodb
+	`)
+
+	tx.Exec(`
+		create table if not exists
+			oids(
+				oid char(64) not null primary key,
+				size bigint not null,
+				pending tinyint unsigned not null default 1
+			)
+		engine=innodb
+	`)
+
+	tx.Exec(`
+		create table if not exists
+			oid_maps(
+				id int not null auto_increment primary key,
+				oid char(64) not null,
+				projectID int not null,
+
+				index (projectID)
+			)
+		engine=innodb
+	`)
+
+	return tx.Commit()
 }
 
 func validateConfig() bool {

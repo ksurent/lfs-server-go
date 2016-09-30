@@ -64,7 +64,7 @@ func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
 }
 
 // Find committed oids for a project id
-func (m *MySQLMetaStore) mapOid(id int64) ([]string, error) {
+func (m *MySQLMetaStore) mapOid(id int) ([]string, error) {
 	rows, err := m.client.Query("select oid from oid_maps where projectID = ? and pending = 0", id)
 	if err != nil {
 		logger.Log(kv{"fn": "MySQLMetaStore.mapOid", "msg": err})
@@ -99,7 +99,7 @@ func (m *MySQLMetaStore) findAllProjects() ([]*MetaProject, error) {
 
 	var (
 		name        string
-		id          int64
+		id          int
 		projectList []*MetaProject
 	)
 
