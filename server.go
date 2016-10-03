@@ -6,7 +6,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
@@ -194,26 +193,6 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) {
 	writeStatus(w, r, 200)
 
 	go metaResponse.Add("200", 1)
-}
-
-// Deep read, starting at path
-func readDir(path string) []string {
-	contents, err := ioutil.ReadDir(path)
-	if err != nil {
-		panic(err)
-	}
-	var files []string
-	for _, bl := range contents {
-		if !bl.IsDir() {
-			files = append(files, bl.Name())
-		} else {
-			nd := fmt.Sprintf("%s", path+"/"+bl.Name())
-			for _, x := range readDir(nd) {
-				files = append(files, fmt.Sprintf("%s/%s", bl.Name(), x))
-			}
-		}
-	}
-	return files
 }
 
 // GetMetaHandler retrieves metadata about the object
