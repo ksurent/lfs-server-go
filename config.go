@@ -53,6 +53,15 @@ type MySQLConfig struct {
 	Enabled  bool   `json:"enabled"`
 }
 
+type GraphiteConfig struct {
+	Endpoint       string `json:"endpoint"`
+	Prefix         string `json:"prefix"`
+	AppendHostname bool   `json:"append_hostname"`
+	Enabled        bool   `json:"enabled"`
+	IntervalS      int    `json:"interval_seconds"`
+	TimeoutMs      int    `json:"timeout_milliseconds"`
+}
+
 // Configuration holds application configuration. Values will be pulled from
 // environment variables, prefixed by keyPrefix. Default values can be added
 // via tags.
@@ -76,6 +85,7 @@ type Configuration struct {
 	Cassandra    *CassandraConfig `json:"cassandra"`
 	Ldap         *LdapConfig      `json:"ldap"`
 	MySQL        *MySQLConfig     `json:"mysql"`
+	Graphite     *GraphiteConfig  `json:"graphite"`
 }
 
 func (c *Configuration) IsHTTPS() bool {
@@ -156,6 +166,14 @@ func init() {
 		Password: "",
 		Enabled:  false,
 	}
+	graphiteConfig := &GraphiteConfig{
+		Endpoint:       "tcp://localhost:2003",
+		Prefix:         "",
+		AppendHostname: false,
+		IntervalS:      60,
+		TimeoutMs:      2000,
+		Enabled:        false,
+	}
 	configuration := &Configuration{
 		Listen:       "tcp://:8080",
 		Host:         "localhost:8080",
@@ -175,12 +193,14 @@ func init() {
 		Aws:          awsConfig,
 		Cassandra:    cassandraConfig,
 		MySQL:        mysqlConfig,
+		Graphite:     graphiteConfig,
 	}
 	err = cfg.Section("Main").MapTo(configuration)
 	err = cfg.Section("Aws").MapTo(configuration.Aws)
 	err = cfg.Section("Ldap").MapTo(configuration.Ldap)
 	err = cfg.Section("Cassandra").MapTo(configuration.Cassandra)
 	err = cfg.Section("MySQL").MapTo(configuration.MySQL)
+	err = cfg.Section("Graphite").MapTo(configuration.Graphite)
 	Config = configuration
 }
 

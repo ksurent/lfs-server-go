@@ -3,15 +3,17 @@ package main
 import (
 	"crypto/rand"
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
-	"io/ioutil"
 )
 
 // RequestVars contain variables from the HTTP request. Variables from routing, json body decoding, and
@@ -108,15 +110,19 @@ func NewApp(content GenericContentStore, meta GenericMetaStore) *App {
 
 	r := mux.NewRouter()
 
+	r.HandleFunc("/debug/vars", app.DebugHandler).Methods("GET")
+
 	r.HandleFunc("/{namespace}/{repo}/objects/batch", app.BatchHandler).Methods("POST").MatcherFunc(MetaMatcher)
+	r.HandleFunc("/{namespace}/{repo}/objects", app.PostHandler).Methods("POST").MatcherFunc(MetaMatcher)
+	r.HandleFunc("/search/{oid}", app.GetSearchHandler).Methods("GET")
+
 	route := "/{namespace}/{repo}/objects/{oid}"
 	r.HandleFunc(route, app.GetContentHandler).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
 	r.HandleFunc(route, app.GetMetaHandler).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
-	r.HandleFunc("/search/{oid}", app.GetSearchHandler).Methods("GET")
 	r.HandleFunc(route, app.PutHandler).Methods("PUT").MatcherFunc(ContentMatcher)
 
-	r.HandleFunc("/{namespace}/{repo}/objects", app.PostHandler).Methods("POST").MatcherFunc(MetaMatcher)
 	app.addMgmt(r)
+
 	app.router = r
 
 	return app
@@ -130,6 +136,8 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.router.ServeHTTP(w, r)
+
+	go totalRequests.Add(1)
 }
 
 // Serve calls http.Serve with the provided Listener and the app's router
@@ -145,8 +153,10 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Log(kv{"fn": "GetContentHandler", "error": err.Error()})
 		if isAuthError(err) {
 			requireAuth(w, r)
+			go downloadResponse.Add("401", 1)
 		} else {
 			writeStatus(w, r, 404)
+			go downloadResponse.Add("404", 1)
 		}
 		return
 	}
@@ -154,11 +164,14 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) {
 	content, err := a.contentStore.Get(meta)
 	if err != nil {
 		writeStatus(w, r, 404)
+		go downloadResponse.Add("404", 1)
 		return
 	}
 
 	io.Copy(w, content)
 	logRequest(r, 200)
+
+	go downloadResponse.Add("200", 1)
 }
 
 // GetSearchHandler (search handler used by pre-push hooks)
@@ -169,14 +182,18 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if isAuthError(err) {
 			requireAuth(w, r)
+			go metaResponse.Add("401", 1)
 		} else {
 			writeStatus(w, r, 404)
+			go metaResponse.Add("404", 1)
 		}
 		return
 	}
 
 	logger.Log(kv{"fn": "GetSearchHandler", "meta": meta})
 	writeStatus(w, r, 200)
+
+	go metaResponse.Add("200", 1)
 }
 
 // Deep read, starting at path
@@ -206,8 +223,10 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if isAuthError(err) {
 			requireAuth(w, r)
+			go metaResponse.Add("401", 1)
 		} else {
 			writeStatus(w, r, 404)
+			go metaResponse.Add("404", 1)
 		}
 		return
 	}
@@ -220,6 +239,8 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logRequest(r, 200)
+
+	go metaResponse.Add("200", 1)
 }
 
 // PostHandler instructs the client how to upload data (legacy API)
@@ -230,8 +251,10 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if isAuthError(err) {
 			requireAuth(w, r)
+			go metaResponse.Add("401", 1)
 		} else {
 			writeStatus(w, r, 404)
+			go metaResponse.Add("404", 1)
 		}
 		return
 	}
@@ -248,6 +271,13 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) {
 	enc.Encode(a.Represent(rv, meta, meta.Existing, true))
 
 	logRequest(r, sentStatus)
+
+	go func(existing bool) {
+		if !existing {
+			metaPending.Add(1)
+		}
+		metaResponse.Add(strconv.Itoa(sentStatus), 1)
+	}(meta.Existing)
 }
 
 // BatchHandler provides the batch api
@@ -263,6 +293,7 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) {
 
 		if isAuthError(err) {
 			requireAuth(w, r)
+			go metaResponse.Add("401", 1)
 			return
 		}
 
@@ -271,6 +302,10 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) {
 				responseObjects,
 				a.Represent(object, meta, meta.Existing, true),
 			)
+
+			if !meta.Existing {
+				go metaPending.Add(1)
+			}
 		}
 	}
 
@@ -284,7 +319,10 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) {
 
 	enc := json.NewEncoder(w)
 	enc.Encode(respobj)
+
 	logRequest(r, 200)
+
+	go metaResponse.Add("200", 1)
 }
 
 // PutHandler receives data from the client and puts it into the content store
@@ -294,9 +332,11 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if isAuthError(err) {
 			requireAuth(w, r)
+			go uploadResponse.Add("401", 1)
 		} else {
 			// TODO check if actually not found
 			writeStatus(w, r, 404)
+			go uploadResponse.Add("404", 1)
 		}
 		return
 	}
@@ -305,6 +345,7 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 		fmt.Fprintf(w, `{"message":"%s"}`, err)
 		logRequest(r, 500)
+		go uploadResponse.Add("500", 1)
 	}
 
 	if err := a.contentStore.Put(meta, r.Body); err != nil {
@@ -319,6 +360,26 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logRequest(r, 200)
+
+	go func() {
+		metaPending.Add(-1)
+		uploadResponse.Add("200", 1)
+	}()
+}
+
+func (a *App) DebugHandler(w http.ResponseWriter, r *http.Request) {
+	// from expvar.go, since the expvarHandler isn't exported :(
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	fmt.Fprintf(w, "{\n")
+	first := true
+	expvar.Do(func(kv expvar.KeyValue) {
+		if !first {
+			fmt.Fprintf(w, ",\n")
+		}
+		first = false
+		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+	})
+	fmt.Fprintf(w, "\n}\n")
 }
 
 // Represent takes a RequestVars and Meta and turns it into a Representation suitable

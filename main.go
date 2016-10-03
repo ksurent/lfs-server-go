@@ -2,13 +2,17 @@ package main
 
 import (
 	"crypto/tls"
+	"expvar"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
+
+	"github.com/peterbourgon/g2g"
 )
 
 const (
@@ -21,6 +25,15 @@ var (
 	BuildVersion = "0.1.0"
 )
 
+var (
+	metaResponse     = expvar.NewMap("meta")
+	downloadResponse = expvar.NewMap("download")
+	uploadResponse   = expvar.NewMap("upload")
+
+	metaPending   = expvar.NewInt("pending_objects")
+	totalRequests = expvar.NewInt("total_requests")
+)
+
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
 // connections. It's used by ListenAndServe and ListenAndServeTLS so
 // dead TCP connections (e.g. closing laptop mid-download) eventually
@@ -28,6 +41,8 @@ var (
 type tcpKeepAliveListener struct {
 	*net.TCPListener
 }
+
+var graphite *g2g.Graphite
 
 func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 	tc, err := ln.AcceptTCP()
@@ -138,9 +153,85 @@ func main() {
 		}
 	}(c, tl)
 
+	if Config.Graphite.Enabled {
+		graphite = g2g.NewGraphite(
+			Config.Graphite.Endpoint,
+			time.Duration(Config.Graphite.IntervalS)*time.Second,
+			time.Duration(Config.Graphite.TimeoutMs)*time.Millisecond,
+		)
+
+		prefix := strings.Trim(Config.Graphite.Prefix, ".")
+
+		if Config.Graphite.AppendHostname {
+			host, err := os.Hostname()
+			if err != nil {
+				logger.Log(kv{"fn": "main", "msg": "Could not detect hostname: " + err.Error()})
+				host = "localhost"
+			}
+			host = strings.Replace(host, ".", "_", -1)
+
+			if prefix == "" {
+				prefix = host
+			} else {
+				prefix += "." + host
+			}
+		}
+
+		setupGraphiteMetrics(prefix, graphite)
+
+		logger.Log(kv{"fn": "main", "msg": "Sending metrics", "prefix": prefix, "endpoint": Config.Graphite.Endpoint})
+	}
+
 	logger.Log(kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": Config.Listen, "version": BuildVersion})
 
 	app := NewApp(contentStore, metaStore)
 	app.Serve(listener)
 	tl.WaitForChildren()
+
+	if Config.Graphite.Enabled {
+		graphite.Shutdown()
+	}
+}
+
+func setupGraphiteMetrics(prefix string, graphite *g2g.Graphite) {
+	for _, v := range []struct {
+		m    *expvar.Map
+		name string
+	}{
+		{downloadResponse, "download"},
+		{uploadResponse, "upload"},
+		{metaResponse, "meta"},
+	} {
+		var mapPrefix string
+		if prefix == "" {
+			mapPrefix = v.name
+		} else {
+			mapPrefix = prefix + "." + v.name
+		}
+
+		for _, code := range []string{"200", "202", "401", "403", "404", "500"} {
+			v.m.Set(code, new(expvar.Int))
+			graphite.Register(mapPrefix+".http_"+code, v.m.Get(code))
+		}
+	}
+
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == "memstats" || kv.Key == "cmdline" {
+			// skip built-in vars
+			return
+		}
+
+		if kv.Key == "download" || kv.Key == "upload" || kv.Key == "meta" {
+			return
+		}
+
+		var path string
+		if prefix == "" {
+			path = kv.Key
+		} else {
+			path = prefix + "." + kv.Key
+		}
+
+		graphite.Register(path, kv.Value)
+	})
 }
