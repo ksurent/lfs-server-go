@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -78,4 +79,36 @@ func (s *ContentStore) Exists(meta *MetaObject) bool {
 		return false
 	}
 	return true
+}
+
+func (s *ContentStore) Verify(meta *MetaObject) error {
+	path := filepath.Join(s.basePath, transformKey(meta.Oid))
+
+	stat, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if stat.Size() != meta.Size {
+		return errSizeMismatch
+	}
+
+	fh, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	buf := bufio.NewReader(fh)
+	hash := sha256.New()
+
+	if _, err := buf.WriteTo(hash); err != nil {
+		return err
+	}
+
+	shaStr := hex.EncodeToString(hash.Sum(nil))
+	if shaStr != meta.Oid {
+		return errHashMismatch
+	}
+
+	return nil
 }

@@ -77,11 +77,23 @@ type GenericContentStore interface {
 	Get(meta *MetaObject) (io.Reader, error)
 	Put(meta *MetaObject, r io.Reader) error
 	Exists(meta *MetaObject) bool
+	Verify(meta *MetaObject) error
 }
 
 // ObjectLink builds a URL linking to the object.
 func (v *RequestVars) ObjectLink() string {
 	path := fmt.Sprintf("/%s/%s/objects/%s", v.Namespace, v.Repo, v.Oid)
+
+	if Config.IsHTTPS() {
+		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
+	}
+
+	return fmt.Sprintf("http://%s%s", Config.Host, path)
+}
+
+// VerifyLink builds a URL used to verify uploaded files.
+func (v *RequestVars) VerifyLink() string {
+	path := fmt.Sprintf("/%s/%s/verify", v.Namespace, v.Repo)
 
 	if Config.IsHTTPS() {
 		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
@@ -114,7 +126,7 @@ func NewApp(content GenericContentStore, meta GenericMetaStore) *App {
 	add(r, "/{namespace}/{repo}/objects/batch", app.BatchHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
 	add(r, "/{namespace}/{repo}/objects", app.PostHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
 	add(r, "/search/{oid}", app.GetSearchHandler, metaResponse).Methods("GET")
-	add(r, "/{namespace}/{repo}/verify", app.VerifyHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
+	add(r, "/{namespace}/{repo}/verify", app.VerifyHandler, metaResponse).Methods("POST").MatcherFunc(ContentMatcher)
 
 	route := "/{namespace}/{repo}/objects/{oid}"
 
@@ -196,7 +208,7 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 
 	if r.Method == "GET" {
 		enc := json.NewEncoder(w)
-		enc.Encode(a.Represent(rv, meta, true, false))
+		enc.Encode(a.Represent(rv, meta, true, false, false))
 	}
 
 	return http.StatusOK
@@ -223,7 +235,7 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	w.WriteHeader(sentStatus)
 
 	enc := json.NewEncoder(w)
-	enc.Encode(a.Represent(rv, meta, meta.Existing, true))
+	enc.Encode(a.Represent(rv, meta, meta.Existing, true, true))
 
 	if !meta.Existing {
 		go metaPending.Add(1)
@@ -250,7 +262,7 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 		if err == nil {
 			responseObjects = append(
 				responseObjects,
-				a.Represent(object, meta, meta.Existing, true),
+				a.Represent(object, meta, meta.Existing, true, true),
 			)
 
 			if !meta.Existing {
@@ -298,6 +310,26 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	return http.StatusOK
 }
 
+func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) int {
+	rv := unpack(r)
+	meta, err := a.metaStore.Get(rv)
+	if err != nil {
+		if isAuthError(err) {
+			return requireAuth(w, r)
+		}
+		return notFound(w, r)
+	}
+
+	w.Header().Set("Content-Type", metaMediaType)
+
+	status := http.StatusNotFound
+	if a.contentStore.Verify(meta) == nil {
+		status = http.StatusOK
+	}
+
+	return status
+}
+
 func (a *App) DebugHandler(w http.ResponseWriter, r *http.Request) {
 	// from expvar.go, since the expvarHandler isn't exported :(
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -315,7 +347,7 @@ func (a *App) DebugHandler(w http.ResponseWriter, r *http.Request) {
 
 // Represent takes a RequestVars and Meta and turns it into a Representation suitable
 // for json encoding
-func (a *App) Represent(rv *RequestVars, meta *MetaObject, download, upload bool) *Representation {
+func (a *App) Represent(rv *RequestVars, meta *MetaObject, download, upload, verify bool) *Representation {
 	rep := &Representation{
 		Oid:   meta.Oid,
 		Size:  meta.Size,
@@ -327,6 +359,7 @@ func (a *App) Represent(rv *RequestVars, meta *MetaObject, download, upload bool
 	if !Config.IsPublic() {
 		header["Authorization"] = rv.Authorization
 	}
+
 	if download {
 		rep.Links["download"] = &link{Href: rv.ObjectLink(), Header: header}
 	}
@@ -334,6 +367,11 @@ func (a *App) Represent(rv *RequestVars, meta *MetaObject, download, upload bool
 	if upload {
 		rep.Links["upload"] = &link{Href: rv.ObjectLink(), Header: header}
 	}
+
+	if verify {
+		rep.Links["verify"] = &link{Href: rv.VerifyLink(), Header: header}
+	}
+
 	return rep
 }
 
