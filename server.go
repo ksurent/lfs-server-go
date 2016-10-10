@@ -111,14 +111,16 @@ func NewApp(content GenericContentStore, meta GenericMetaStore) *App {
 
 	r.HandleFunc("/debug/vars", app.DebugHandler).Methods("GET")
 
-	r.HandleFunc("/{namespace}/{repo}/objects/batch", app.BatchHandler).Methods("POST").MatcherFunc(MetaMatcher)
-	r.HandleFunc("/{namespace}/{repo}/objects", app.PostHandler).Methods("POST").MatcherFunc(MetaMatcher)
-	r.HandleFunc("/search/{oid}", app.GetSearchHandler).Methods("GET")
+	add(r, "/{namespace}/{repo}/objects/batch", app.BatchHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
+	add(r, "/{namespace}/{repo}/objects", app.PostHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
+	add(r, "/search/{oid}", app.GetSearchHandler, metaResponse).Methods("GET")
+	add(r, "/{namespace}/{repo}/verify", app.VerifyHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
 
 	route := "/{namespace}/{repo}/objects/{oid}"
-	r.HandleFunc(route, app.GetContentHandler).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
-	r.HandleFunc(route, app.GetMetaHandler).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
-	r.HandleFunc(route, app.PutHandler).Methods("PUT").MatcherFunc(ContentMatcher)
+
+	add(r, route, app.GetMetaHandler, metaResponse).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
+	add(r, route, app.GetContentHandler, downloadResponse).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
+	add(r, route, app.PutHandler, uploadResponse).Methods("PUT").MatcherFunc(ContentMatcher)
 
 	app.addMgmt(r)
 
@@ -145,69 +147,49 @@ func (a *App) Serve(l net.Listener) error {
 }
 
 // GetContentHandler gets the content from the content store
-func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) {
+func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(kv{"fn": "GetContentHandler", "error": err.Error()})
 		if isAuthError(err) {
-			requireAuth(w, r)
-			go downloadResponse.Add("401", 1)
-		} else {
-			writeStatus(w, r, 404)
-			go downloadResponse.Add("404", 1)
+			return requireAuth(w, r)
 		}
-		return
+		return notFound(w, r)
 	}
 
 	content, err := a.contentStore.Get(meta)
 	if err != nil {
-		writeStatus(w, r, 404)
-		go downloadResponse.Add("404", 1)
-		return
+		return notFound(w, r)
 	}
 
 	io.Copy(w, content)
-	logRequest(r, 200)
 
-	go downloadResponse.Add("200", 1)
+	return http.StatusOK
 }
 
 // GetSearchHandler (search handler used by pre-push hooks)
-func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) {
+func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
-	meta, err := a.metaStore.Get(rv)
-	logger.Log(kv{"fn": "GetSearchHandler", "meta": err})
+	_, err := a.metaStore.Get(rv)
 	if err != nil {
 		if isAuthError(err) {
-			requireAuth(w, r)
-			go metaResponse.Add("401", 1)
-		} else {
-			writeStatus(w, r, 404)
-			go metaResponse.Add("404", 1)
+			return requireAuth(w, r)
 		}
-		return
+		return notFound(w, r)
 	}
 
-	logger.Log(kv{"fn": "GetSearchHandler", "meta": meta})
-	writeStatus(w, r, 200)
-
-	go metaResponse.Add("200", 1)
+	return http.StatusOK
 }
 
 // GetMetaHandler retrieves metadata about the object
-func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) {
+func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Get(rv)
 	if err != nil {
 		if isAuthError(err) {
-			requireAuth(w, r)
-			go metaResponse.Add("401", 1)
-		} else {
-			writeStatus(w, r, 404)
-			go metaResponse.Add("404", 1)
+			return requireAuth(w, r)
 		}
-		return
+		return notFound(w, r)
 	}
 
 	w.Header().Set("Content-Type", metaMediaType)
@@ -217,25 +199,19 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) {
 		enc.Encode(a.Represent(rv, meta, true, false))
 	}
 
-	logRequest(r, 200)
-
-	go metaResponse.Add("200", 1)
+	return http.StatusOK
 }
 
 // PostHandler instructs the client how to upload data (legacy API)
-func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) {
+func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Put(rv)
 
 	if err != nil {
 		if isAuthError(err) {
-			requireAuth(w, r)
-			go metaResponse.Add("401", 1)
-		} else {
-			writeStatus(w, r, 404)
-			go metaResponse.Add("404", 1)
+			return requireAuth(w, r)
 		}
-		return
+		return notFound(w, r)
 	}
 
 	w.Header().Set("Content-Type", metaMediaType)
@@ -249,18 +225,15 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) {
 	enc := json.NewEncoder(w)
 	enc.Encode(a.Represent(rv, meta, meta.Existing, true))
 
-	logRequest(r, sentStatus)
+	if !meta.Existing {
+		go metaPending.Add(1)
+	}
 
-	go func(existing bool) {
-		if !existing {
-			metaPending.Add(1)
-		}
-		metaResponse.Add(strconv.Itoa(sentStatus), 1)
-	}(meta.Existing)
+	return sentStatus
 }
 
 // BatchHandler provides the batch api
-func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) {
+func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 	bv := unpackbatch(r)
 
 	var responseObjects []*Representation
@@ -271,9 +244,7 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) {
 		meta, err := a.metaStore.Put(object)
 
 		if isAuthError(err) {
-			requireAuth(w, r)
-			go metaResponse.Add("401", 1)
-			return
+			return requireAuth(w, r)
 		}
 
 		if err == nil {
@@ -299,51 +270,32 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) {
 	enc := json.NewEncoder(w)
 	enc.Encode(respobj)
 
-	logRequest(r, 200)
-
-	go metaResponse.Add("200", 1)
+	return http.StatusOK
 }
 
 // PutHandler receives data from the client and puts it into the content store
-func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) {
+func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.GetPending(rv)
 	if err != nil {
 		if isAuthError(err) {
-			requireAuth(w, r)
-			go uploadResponse.Add("401", 1)
-		} else {
-			// TODO check if actually not found
-			writeStatus(w, r, 404)
-			go uploadResponse.Add("404", 1)
+			return requireAuth(w, r)
 		}
-		return
-	}
-
-	setInternalError := func(err error) {
-		w.WriteHeader(500)
-		fmt.Fprintf(w, `{"message":"%s"}`, err)
-		logRequest(r, 500)
-		go uploadResponse.Add("500", 1)
+		return notFound(w, r)
 	}
 
 	if err := a.contentStore.Put(meta, r.Body); err != nil {
-		setInternalError(err)
-		return
+		return http.StatusInternalServerError
 	}
 
 	_, err = a.metaStore.Commit(rv)
 	if err != nil {
-		setInternalError(err)
-		return
+		return http.StatusInternalServerError
 	}
 
-	logRequest(r, 200)
+	go metaPending.Add(-1)
 
-	go func() {
-		metaPending.Add(-1)
-		uploadResponse.Add("200", 1)
-	}()
+	return http.StatusOK
 }
 
 func (a *App) DebugHandler(w http.ResponseWriter, r *http.Request) {
@@ -446,6 +398,15 @@ func unpackbatch(r *http.Request) *BatchVars {
 	return &bv
 }
 
+func logRequest(r *http.Request, status int) {
+	logger.Log(kv{
+		"method":     r.Method,
+		"url":        r.URL,
+		"status":     status,
+		"request_id": context.Get(r, "RequestID"),
+	})
+}
+
 func writeStatus(w http.ResponseWriter, r *http.Request, status int) {
 	message := http.StatusText(status)
 
@@ -457,11 +418,6 @@ func writeStatus(w http.ResponseWriter, r *http.Request, status int) {
 
 	w.WriteHeader(status)
 	fmt.Fprint(w, message)
-	logRequest(r, status)
-}
-
-func logRequest(r *http.Request, status int) {
-	logger.Log(kv{"method": r.Method, "url": r.URL, "status": status, "request_id": context.Get(r, "RequestID")})
 }
 
 func isAuthError(err error) bool {
@@ -474,7 +430,23 @@ func isAuthError(err error) bool {
 	return false
 }
 
-func requireAuth(w http.ResponseWriter, r *http.Request) {
+func notFound(w http.ResponseWriter, r *http.Request) int {
+	writeStatus(w, r, http.StatusNotFound)
+	return http.StatusNotFound
+}
+
+func requireAuth(w http.ResponseWriter, r *http.Request) int {
 	w.Header().Set("Lfs-Authenticate", "Basic realm=lfs-server-go")
-	writeStatus(w, r, 401)
+	writeStatus(w, r, http.StatusUnauthorized)
+	return http.StatusUnauthorized
+}
+
+func add(r *mux.Router, path string, f func(http.ResponseWriter, *http.Request) int, exp *expvar.Map) *mux.Route {
+	wrapped := func(w http.ResponseWriter, r *http.Request) {
+		status := f(w, r)
+		logRequest(r, status)
+		go exp.Add(strconv.Itoa(status), 1)
+	}
+
+	return r.HandleFunc(path, wrapped)
 }
