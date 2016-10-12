@@ -25,7 +25,7 @@ func NewContentStore(base string) (*ContentStore, error) {
 
 // Get takes a Meta object and retreives the content from the store, returning
 // it as an io.Reader.
-func (s *ContentStore) Get(meta *MetaObject) (io.Reader, error) {
+func (s *ContentStore) Get(meta *MetaObject) (io.ReadCloser, error) {
 	path := filepath.Join(s.basePath, transformKey(meta.Oid))
 
 	return os.Open(path)

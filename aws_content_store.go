@@ -64,7 +64,7 @@ func (s *AwsContentStore) makeBucket() error {
 	return nil
 }
 
-func (s *AwsContentStore) Get(meta *MetaObject) (io.Reader, error) {
+func (s *AwsContentStore) Get(meta *MetaObject) (io.ReadCloser, error) {
 	path := transformKey(meta.Oid)
 	return s.bucket.GetReader(path)
 }

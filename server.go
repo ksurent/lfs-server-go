@@ -74,7 +74,7 @@ type GenericMetaStore interface {
 }
 
 type GenericContentStore interface {
-	Get(meta *MetaObject) (io.Reader, error)
+	Get(meta *MetaObject) (io.ReadCloser, error)
 	Put(meta *MetaObject, r io.Reader) error
 	Exists(meta *MetaObject) bool
 	Verify(meta *MetaObject) error
@@ -169,12 +169,13 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 		return notFound(w, r)
 	}
 
-	content, err := a.contentStore.Get(meta)
+	reader, err := a.contentStore.Get(meta)
 	if err != nil {
 		return notFound(w, r)
 	}
+	defer reader.Close()
 
-	io.Copy(w, content)
+	io.Copy(w, reader)
 
 	return http.StatusOK
 }
