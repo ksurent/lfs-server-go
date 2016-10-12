@@ -263,7 +263,7 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 		if err == nil {
 			responseObjects = append(
 				responseObjects,
-				a.Represent(object, meta, meta.Existing, true, true),
+				a.Represent(object, meta, meta.Existing, !meta.Existing, true),
 			)
 
 			if !meta.Existing {
