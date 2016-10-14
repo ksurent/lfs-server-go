@@ -141,12 +141,10 @@ func TestPostAuthedNewObject(t *testing.T) {
 		t.Fatalf("expected to see a size of `1234`, got: `%d`", meta.Size)
 	}
 
-	// This test is failing and i have no idea why.
-	// Not causing production failures
-	// if download, ok := meta.Links["download"]; ok {
-	// 	fmt.Println(ok)
-	// 	t.Fatalf("expected POST to not contain a download link, got %v", download)
-	// }
+	if download, ok := meta.Links["download"]; ok {
+		fmt.Println(ok)
+		t.Fatalf("expected POST to not contain a download link, got %v", download)
+	}
 
 	upload, ok := meta.Links["upload"]
 	if !ok {
