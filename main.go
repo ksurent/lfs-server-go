@@ -32,6 +32,8 @@ var (
 
 	metaPending   = expvar.NewInt("pending_objects")
 	totalRequests = expvar.NewInt("total_requests")
+
+	expvarVersion = expvar.NewString("BuildVersion")
 )
 
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
@@ -183,6 +185,8 @@ func main() {
 	}
 
 	logger.Log(kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": Config.Listen, "version": BuildVersion})
+
+	expvarVersion.Set(BuildVersion)
 
 	app := NewApp(contentStore, metaStore)
 	app.Serve(listener)
