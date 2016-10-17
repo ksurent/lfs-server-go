@@ -26,6 +26,11 @@ func NewMySQLSession() (*sql.DB, error) {
 		return nil, fmt.Errorf("open: %s", err)
 	}
 
+	err = db.Ping()
+	if err != nil {
+		return nil, fmt.Errorf("ping: %s", err)
+	}
+
 	if err := createTables(db); err != nil {
 		return nil, fmt.Errorf("creating tables: %s", err)
 	}

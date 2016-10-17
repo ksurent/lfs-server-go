@@ -39,9 +39,14 @@ func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
 	for rows.Next() {
 		err := rows.Scan(&oid, &size)
 		if err != nil {
-			logger.Log(kv{"fn": "MySQLMetaStore.findAllOids", "msg": err})
+			return nil, err
 		}
 		oidList = append(oidList, &MetaObject{Oid: oid, Size: size})
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	return oidList, nil
@@ -64,10 +69,14 @@ func (m *MySQLMetaStore) mapOid(id int) ([]string, error) {
 	for rows.Next() {
 		err := rows.Scan(&oid)
 		if err != nil {
-			logger.Log(kv{"fn": "MySQLMetaStore.mapOid", "msg": err})
 			return nil, err
 		}
 		oidList = append(oidList, oid)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	return oidList, nil
@@ -90,16 +99,20 @@ func (m *MySQLMetaStore) findAllProjects() ([]*MetaProject, error) {
 	for rows.Next() {
 		err := rows.Scan(&id, &name)
 		if err != nil {
-			logger.Log(kv{"fn": "MySQLMetaStore.findAllProjects", "msg": err})
+			return nil, err
 		}
 
 		oids, err := m.mapOid(id)
 		if err != nil {
-			logger.Log(kv{"fn": "MySQLMetaStore.findAllProjects", "msg": err})
 			return nil, err
 		}
 
 		projectList = append(projectList, &MetaProject{Name: name, Oids: oids})
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	return projectList, nil
@@ -208,6 +221,11 @@ func (m *MySQLMetaStore) findOid(oid string, pending bool) (*MetaObject, error) 
 		}
 
 		meta.ProjectNames = append(meta.ProjectNames, name)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	return &meta, nil
