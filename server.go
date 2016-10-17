@@ -163,6 +163,8 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Get(rv)
 	if err != nil {
+		logger.Log(kv{"fn": "GetContentHandler", "error": err})
+
 		if isAuthError(err) {
 			return requireAuth(w, r)
 		}
@@ -171,6 +173,8 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 
 	reader, err := a.contentStore.Get(meta)
 	if err != nil {
+		logger.Log(kv{"fn": "GetContentHandler", "error": err})
+
 		return notFound(w, r)
 	}
 	defer reader.Close()
@@ -185,6 +189,8 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	_, err := a.metaStore.Get(rv)
 	if err != nil {
+		logger.Log(kv{"fn": "GetSearchHandler", "error": err})
+
 		if isAuthError(err) {
 			return requireAuth(w, r)
 		}
@@ -199,6 +205,8 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Get(rv)
 	if err != nil {
+		logger.Log(kv{"fn": "GetMetaHandler", "error": err})
+
 		if isAuthError(err) {
 			return requireAuth(w, r)
 		}
@@ -219,8 +227,9 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Put(rv)
-
 	if err != nil {
+		logger.Log(kv{"fn": "PostHandler", "error": err})
+
 		if isAuthError(err) {
 			return requireAuth(w, r)
 		}
@@ -255,20 +264,23 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 		// Put() checks if the object already exists in the meta store and
 		// returns it if it does
 		meta, err := a.metaStore.Put(object)
+		if err != nil {
+			logger.Log(kv{"fn": "BatchHandler", "object": object, "error": err})
 
-		if isAuthError(err) {
-			return requireAuth(w, r)
+			if isAuthError(err) {
+				return requireAuth(w, r)
+			}
+
+			continue
 		}
 
-		if err == nil {
-			responseObjects = append(
-				responseObjects,
-				a.Represent(object, meta, meta.Existing, !meta.Existing, true),
-			)
+		responseObjects = append(
+			responseObjects,
+			a.Represent(object, meta, meta.Existing, !meta.Existing, true),
+		)
 
-			if !meta.Existing {
-				go metaPending.Add(1)
-			}
+		if !meta.Existing {
+			go metaPending.Add(1)
 		}
 	}
 
@@ -291,6 +303,8 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.GetPending(rv)
 	if err != nil {
+		logger.Log(kv{"fn": "PutHandler", "error": err})
+
 		if isAuthError(err) {
 			return requireAuth(w, r)
 		}
@@ -298,11 +312,15 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	}
 
 	if err := a.contentStore.Put(meta, r.Body); err != nil {
+		logger.Log(kv{"fn": "PutHandler", "meta": meta, "error": err})
+
 		return http.StatusInternalServerError
 	}
 
 	_, err = a.metaStore.Commit(rv)
 	if err != nil {
+		logger.Log(kv{"fn": "PutHandler", "meta": meta, "error": err})
+
 		return http.StatusInternalServerError
 	}
 
@@ -315,6 +333,8 @@ func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Get(rv)
 	if err != nil {
+		logger.Log(kv{"fn": "VerifyHandler", "error": err})
+
 		if isAuthError(err) {
 			return requireAuth(w, r)
 		}
