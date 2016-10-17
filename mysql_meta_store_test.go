@@ -17,9 +17,10 @@ func TestMySQLConfiguration(t *testing.T) {
 		Database: "lfs_server_go_test",
 	}
 
-	mysqlStore, err := NewMySQLMetaStore()
-	if mysqlStore != nil {
-		t.Errorf("expected MySQL configration validation error, got : %s", err)
+	db, err := NewMySQLSession()
+	if err == nil {
+		db.Close()
+		t.Errorf("expected validation error")
 	}
 }
 
@@ -190,9 +191,13 @@ func setupMySQLMeta() error {
 		Database: "lfs_server_go",
 	}
 
-	mysqlStore, err := NewMySQLMetaStore()
+	db, err := NewMySQLSession()
 	if err != nil {
-		fmt.Printf("error initializing test meta store: %s\n", err)
+		return errors.New(fmt.Sprintf("error initializing test meta store: %s\n", err))
+	}
+
+	mysqlStore, err := NewMySQLMetaStore(db)
+	if err != nil {
 		return errors.New(fmt.Sprintf("error initializing test meta store: %s\n", err))
 	}
 

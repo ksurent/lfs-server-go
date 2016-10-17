@@ -6,28 +6,12 @@ import (
 	"strings"
 )
 
-/*
-MySQLMetaStore struct.
-*/
 type MySQLMetaStore struct {
-	mysqlService *MySQLService
-	client       *sql.DB
+	client *sql.DB
 }
 
-/*
-NewMySQLMetaStore (method update the MySQLMetaStore struct)
-*/
-func NewMySQLMetaStore(mysqlService ...*MySQLService) (*MySQLMetaStore, error) {
-	if len(mysqlService) == 0 {
-		mysqlService = append(mysqlService, NewMySQLSession())
-	}
-
-	mysql := mysqlService[0]
-
-	if mysql.Fail {
-		return nil, errMissingParams
-	}
-	return &MySQLMetaStore{mysqlService: mysql, client: mysql.Client}, nil
+func NewMySQLMetaStore(db *sql.DB) (*MySQLMetaStore, error) {
+	return &MySQLMetaStore{client: db}, nil
 }
 
 /*

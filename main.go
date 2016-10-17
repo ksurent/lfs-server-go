@@ -86,8 +86,11 @@ func FindMetaStore() (GenericMetaStore, error) {
 		m, err := NewCassandraMetaStore(NewCassandraSession())
 		return m, err
 	case "mysql":
-		m, err := NewMySQLMetaStore(NewMySQLSession())
-		return m, err
+		db, err := NewMySQLSession()
+		if err != nil {
+			return nil, err
+		}
+		return NewMySQLMetaStore(db)
 	default:
 		m, err := NewMetaStore(Config.MetaDB)
 		return m, err

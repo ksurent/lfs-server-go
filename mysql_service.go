@@ -2,48 +2,35 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
 	"strings"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
-/*
-MySQLService struct
-*/
-type MySQLService struct {
-	Client *sql.DB
-	Fail   bool
-}
-
-/*
-NewMySQLSession (method used in mysql_meta_store.go)
-create requeired table and return sql client object
-*/
-func NewMySQLSession() *MySQLService {
-
-	validate := validateConfig()
-
-	if validate {
-		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s",
-			Config.MySQL.Username,
-			Config.MySQL.Password,
-			Config.MySQL.Host,
-			Config.MySQL.Database)
-
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			return &MySQLService{Fail: true}
-		}
-
-		if err := createTables(db); err != nil {
-			return &MySQLService{Fail: true}
-		}
-
-		return &MySQLService{Client: db}
+func NewMySQLSession() (*sql.DB, error) {
+	err := validateConfig()
+	if err != nil {
+		return nil, fmt.Errorf("config: %s", err)
 	}
 
-	logger.Log(kv{"fn": "NewMySQLSession", "msg": "MySQL configuration validation failed"})
-	return &MySQLService{Fail: true}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s",
+		Config.MySQL.Username,
+		Config.MySQL.Password,
+		Config.MySQL.Host,
+		Config.MySQL.Database)
+
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open: %s", err)
+	}
+
+	if err := createTables(db); err != nil {
+		return nil, fmt.Errorf("creating tables: %s", err)
+	}
+
+	return db, nil
 }
 
 func createTables(db *sql.DB) error {
@@ -87,16 +74,22 @@ func createTables(db *sql.DB) error {
 	return tx.Commit()
 }
 
-func validateConfig() bool {
-	if len(strings.TrimSpace(Config.MySQL.Database)) == 0 && len(strings.TrimSpace(Config.MySQL.Host)) == 0 {
-		logger.Log(kv{"fn": "NewMySQLSession", "msg": "Require Host and Database to connect MySQL "})
-		return false
+func validateConfig() error {
+	if len(strings.TrimSpace(Config.MySQL.Host)) == 0 {
+		return errors.New("MySQL host is not specified")
 	}
 
-	if len(strings.TrimSpace(Config.MySQL.Username)) == 0 && len(strings.TrimSpace(Config.MySQL.Password)) == 0 {
-		logger.Log(kv{"fn": "NewMySQLSession", "msg": "Require Username and Password to connect MySQL "})
-		return false
+	if len(strings.TrimSpace(Config.MySQL.Database)) == 0 {
+		return errors.New("MySQL database is not specified")
 	}
 
-	return true
+	if len(strings.TrimSpace(Config.MySQL.Username)) == 0 {
+		return errors.New("MySQL username is not specified")
+	}
+
+	if len(strings.TrimSpace(Config.MySQL.Password)) == 0 {
+		return errors.New("MySQL password is not specified")
+	}
+
+	return nil
 }
