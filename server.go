@@ -377,7 +377,7 @@ func (a *App) Represent(rv *RequestVars, meta *MetaObject, download, upload, ver
 
 	header := make(map[string]string)
 	header["Accept"] = contentMediaType
-	if !Config.IsPublic() {
+	if rv.Authorization != "" {
 		header["Authorization"] = rv.Authorization
 	}
 
