@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"sync"
+
+	"github.com/ksurent/lfs-server-go/logger"
 )
 
 // TrackingListener tracks incoming connections so that application shutdown can
@@ -79,7 +81,7 @@ func (l *TrackingListener) Accept() (net.Conn, error) {
 // connections have finished.
 func (l *TrackingListener) WaitForChildren() {
 	l.wg.Wait()
-	logger.Log(kv{"fn": "shutdown"})
+	logger.Log("Shutting down")
 }
 
 type trackedConn struct {

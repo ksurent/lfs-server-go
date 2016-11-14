@@ -6,6 +6,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+
+	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/meta"
 )
 
 type values map[string]string
@@ -34,7 +37,7 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	}
 	header := map[string][]string{"Accept": {"application/json"}, "Accept-Encoding": {"gzip", "text"}}
 	req.Header = header
-	req.SetBasicAuth(Config.AdminUser, Config.AdminPass)
+	req.SetBasicAuth(config.Config.AdminUser, config.Config.AdminPass)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("response error: %s", err)
@@ -42,7 +45,7 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	if res.StatusCode != 200 {
 		t.Fatalf("response code failed. Expected 200, got %d", res.StatusCode)
 	}
-	var metas []*MetaObject
+	var metas []*meta.Object
 	data, _ := ioutil.ReadAll(res.Body)
 	// validate the request header
 	testRequestHeader(t, req, "Accept", "application/json")
@@ -50,20 +53,20 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	testResponseHeader(t, res, "Content-Type", "application/json")
 	json.Unmarshal(data, &metas)
 	var good bool
-	var meta *MetaObject
+	var found *meta.Object
 	good = false
 	for _, m := range metas {
 		if m.Oid == contentOid {
-			meta = m
+			found = m
 			good = true
 		}
 	}
 	if !good {
-		t.Errorf("expected oid to be %+v, got %+v", contentOid, meta.Oid)
+		t.Errorf("expected oid to be %+v, got %+v", contentOid, found.Oid)
 	}
 }
 func TestMgmtGetProjects_Json(t *testing.T) {
-	_, err := testMetaStore.Put(&RequestVars{Repo: testRepo, User: testUser, Oid: contentOid, Authorization: testAuth})
+	_, err := testMetaStore.Put(&meta.RequestVars{Repo: testRepo, User: testUser, Oid: contentOid, Authorization: testAuth})
 	if err != nil {
 		fmt.Println("got an err", err.Error())
 	}
@@ -73,25 +76,25 @@ func TestMgmtGetProjects_Json(t *testing.T) {
 	}
 	header := map[string][]string{"Accept": {"application/json"}, "Accept-Encoding": {"gzip", "text"}}
 	req.Header = header
-	req.SetBasicAuth(Config.AdminUser, Config.AdminPass)
+	req.SetBasicAuth(config.Config.AdminUser, config.Config.AdminPass)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("response error: %s", err)
 	}
-	var metas []*MetaProject
-	var meta *MetaProject
+	var metas []*meta.Project
+	var found *meta.Project
 	data, _ := ioutil.ReadAll(res.Body)
 	json.Unmarshal(data, &metas)
 	var good bool
 	good = false
 	for _, m := range metas {
 		if m.Name == testRepo {
-			meta = m
+			found = m
 			good = true
 		}
 	}
 	if !good {
-		t.Errorf("expected project name to be %+v, got %+v", testRepo, meta)
+		t.Errorf("expected project name to be %+v, got %+v", testRepo, found)
 	}
 
 }
@@ -107,24 +110,24 @@ func TestMgmtGetUsers_Json(t *testing.T) {
 	}
 	header := map[string][]string{"Accept": {"application/json"}, "Accept-Encoding": {"gzip", "text"}}
 	req.Header = header
-	req.SetBasicAuth(Config.AdminUser, Config.AdminPass)
+	req.SetBasicAuth(config.Config.AdminUser, config.Config.AdminPass)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("response error: %s", err)
 	}
-	var meta *MetaUser
-	var metas []*MetaUser
+	var found *meta.User
+	var metas []*meta.User
 	data, _ := ioutil.ReadAll(res.Body)
 	json.Unmarshal(data, &metas)
 	var good bool
 	good = false
 	for _, m := range metas {
 		if m.Name == testUser {
-			meta = m
+			found = m
 			good = true
 		}
 	}
 	if !good {
-		t.Errorf("expected project name to be %+v, got %+v", testRepo, meta)
+		t.Errorf("expected user name to be %+v, got %+v", testUser, found.Name)
 	}
 }

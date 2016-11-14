@@ -10,6 +10,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/content"
+	"github.com/ksurent/lfs-server-go/content/fs"
+	"github.com/ksurent/lfs-server-go/logger"
+	"github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta/boltdb"
 )
 
 func TestGetAuthed(t *testing.T) {
@@ -34,7 +41,7 @@ func TestGetAuthed(t *testing.T) {
 		t.Fatalf("expected response to contain content, got error: %s", err)
 	}
 
-	if string(by) != content {
+	if string(by) != contentStr {
 		t.Fatalf("expected content to be `content`, got: %s", string(by))
 	}
 }
@@ -73,19 +80,19 @@ func TestGetMetaAuthed(t *testing.T) {
 		t.Fatalf("expected status 200, got %d %s", res.StatusCode, req.URL)
 	}
 
-	var meta Representation
+	var m Representation
 	dec := json.NewDecoder(res.Body)
-	dec.Decode(&meta)
+	dec.Decode(&m)
 
-	if meta.Oid != contentOid {
-		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", contentOid, meta.Oid)
+	if m.Oid != contentOid {
+		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", contentOid, m.Oid)
 	}
 
-	if meta.Size != contentSize {
-		t.Fatalf("expected to see a size of `%d`, got: `%d`", contentSize, meta.Size)
+	if m.Size != contentSize {
+		t.Fatalf("expected to see a size of `%d`, got: `%d`", contentSize, m.Size)
 	}
 
-	download := meta.Links["download"]
+	download := m.Links["download"]
 
 	if download.Href != baseURL()+"/namespace/repo/objects/"+contentOid {
 		t.Fatalf("expected download link, got %s", download.Href)
@@ -129,24 +136,24 @@ func TestPostAuthedNewObject(t *testing.T) {
 		t.Fatalf("expected status 202, got %d", res.StatusCode)
 	}
 
-	var meta Representation
+	var m Representation
 	dec := json.NewDecoder(res.Body)
-	dec.Decode(&meta)
+	dec.Decode(&m)
 
-	if meta.Oid != nonexistingOid {
-		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", nonexistingOid, meta.Oid)
+	if m.Oid != nonexistingOid {
+		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", nonexistingOid, m.Oid)
 	}
 
-	if meta.Size != 1234 {
-		t.Fatalf("expected to see a size of `1234`, got: `%d`", meta.Size)
+	if m.Size != 1234 {
+		t.Fatalf("expected to see a size of `1234`, got: `%d`", m.Size)
 	}
 
-	if download, ok := meta.Links["download"]; ok {
+	if download, ok := m.Links["download"]; ok {
 		fmt.Println(ok)
 		t.Fatalf("expected POST to not contain a download link, got %v", download)
 	}
 
-	upload, ok := meta.Links["upload"]
+	upload, ok := m.Links["upload"]
 	if !ok {
 		t.Fatal("expected upload link to be present")
 	}
@@ -176,24 +183,24 @@ func TestPostAuthedExistingObject(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", res.StatusCode)
 	}
 
-	var meta Representation
+	var m Representation
 	dec := json.NewDecoder(res.Body)
-	dec.Decode(&meta)
+	dec.Decode(&m)
 
-	if meta.Oid != contentOid {
-		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", contentOid, meta.Oid)
+	if m.Oid != contentOid {
+		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", contentOid, m.Oid)
 	}
 
-	if meta.Size != contentSize {
-		t.Fatalf("expected to see a size of `%d`, got: `%d`", contentSize, meta.Size)
+	if m.Size != contentSize {
+		t.Fatalf("expected to see a size of `%d`, got: `%d`", contentSize, m.Size)
 	}
 
-	download := meta.Links["download"]
+	download := m.Links["download"]
 	if download.Href != baseURL()+"/namespace/repo/objects/"+contentOid {
 		t.Fatalf("expected download link to be %s, got %s", baseURL()+"/namespace/repo/objects/"+contentOid, download.Href)
 	}
 
-	upload, ok := meta.Links["upload"]
+	upload, ok := m.Links["upload"]
 	if !ok {
 		t.Fatalf("expected upload link to be present")
 	}
@@ -233,7 +240,7 @@ func TestPut(t *testing.T) {
 	req.SetBasicAuth(testUser, testPass)
 	req.Header.Set("Accept", contentMediaType)
 	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(content)))
+	req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(contentStr)))
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -244,7 +251,7 @@ func TestPut(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", res.StatusCode)
 	}
 
-	r, err := testContentStore.Get(&MetaObject{Oid: contentOid})
+	r, err := testContentStore.Get(&meta.Object{Oid: contentOid})
 	if err != nil {
 		t.Fatalf("error retreiving from content store: %s", err)
 	}
@@ -252,7 +259,7 @@ func TestPut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error reading content: %s", err)
 	}
-	if string(c) != content {
+	if string(c) != contentStr {
 		t.Fatalf("expected content, got `%s`", string(c))
 	}
 }
@@ -296,14 +303,14 @@ func TestMediaTypesParsed(t *testing.T) {
 
 var (
 	lfsServer         *httptest.Server
-	testMetaStore     GenericMetaStore
-	testContentStore  GenericContentStore
+	testMetaStore     meta.GenericMetaStore
+	testContentStore  content.GenericContentStore
 	testUser          = "admin"
 	testPass          = "admin"
 	testAuth          = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
 	badAuth           = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("azog:defiler")))
-	content           = "this is my content"
-	contentSize       = int64(len(content))
+	contentStr        = "this is my content"
+	contentSize       = int64(len(contentStr))
 	contentOid        = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
 	nonexistingOid    = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
 	noAuthcontent     = "Some content goes here"
@@ -314,20 +321,20 @@ var (
 )
 
 func baseURL() string {
-	return fmt.Sprintf("%s://%s", Config.Scheme, Config.Host)
+	return fmt.Sprintf("%s://%s", config.Config.Scheme, config.Config.Host)
 }
 
 func TestMain(m *testing.M) {
 	os.Remove("lfs-test.db")
-	Config.Ldap.Enabled = false
+	config.Config.Ldap.Enabled = false
 	var err error
-	testMetaStore, err = NewMetaStore(Config.MetaDB)
+	testMetaStore, err = boltdb.NewMetaStore(config.Config.MetaDB)
 	if err != nil {
 		fmt.Printf("Error creating meta store: %s", err)
 		os.Exit(1)
 	}
 
-	testContentStore, err = NewContentStore("lfs-content-test")
+	testContentStore, err = fs.NewContentStore("lfs-content-test")
 	if err != nil {
 		fmt.Printf("Error creating content store: %s", err)
 		os.Exit(1)
@@ -346,7 +353,7 @@ func TestMain(m *testing.M) {
 	app := NewApp(testContentStore, testMetaStore)
 	lfsServer = httptest.NewServer(app)
 
-	logger = NewKVLogger(ioutil.Discard)
+	logger.SetOutput(ioutil.Discard)
 
 	ret := m.Run()
 
@@ -364,7 +371,7 @@ func seedMetaStore() error {
 		return err
 	}
 
-	rv := &RequestVars{
+	rv := &meta.RequestVars{
 		Authorization: testAuth,
 		Oid:           contentOid,
 		Size:          contentSize,
@@ -382,9 +389,9 @@ func seedMetaStore() error {
 }
 
 func seedContentStore() error {
-	meta := &MetaObject{Oid: contentOid, Size: contentSize}
-	buf := bytes.NewBuffer([]byte(content))
-	if err := testContentStore.Put(meta, buf); err != nil {
+	m := &meta.Object{Oid: contentOid, Size: contentSize}
+	buf := bytes.NewBuffer([]byte(contentStr))
+	if err := testContentStore.Put(m, buf); err != nil {
 		return err
 	}
 

@@ -1,4 +1,4 @@
-package main
+package aws
 
 import (
 	"bytes"
@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mitchellh/goamz/aws"
+	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/meta"
+
+	aws_ "github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
 )
 
@@ -22,7 +25,7 @@ func TestAwsContentStorePut(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &MetaObject{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -46,7 +49,7 @@ func TestAwsContentStorePutHashMismatch(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &MetaObject{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -66,7 +69,7 @@ func TestAwsContentStorePutSizeMismatch(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &MetaObject{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 14,
 	}
@@ -87,7 +90,7 @@ func TestAwsContentStoreGet(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &MetaObject{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -117,7 +120,7 @@ func TestAwsContentStoreGetNonExisting(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	_, err := awsContentStore.Get(&MetaObject{Oid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	_, err := awsContentStore.Get(&meta.Object{Oid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
 	if err == nil {
 		t.Fatalf("expected to get an error, but content existed")
 	}
@@ -131,7 +134,7 @@ func TestAwsContentStoreExists(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &MetaObject{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -159,48 +162,57 @@ func TestAwsSettings(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	Config.Aws.BucketAcl = "private"
+	config.Config.Aws.BucketAcl = "private"
 	awsContentStore.setAcl()
 	if awsContentStore.acl != s3.Private {
 		t.Fatalf("Should have been set to private, but got %s", awsContentStore.acl)
 	}
-	Config.Aws.BucketAcl = "public-read"
+	config.Config.Aws.BucketAcl = "public-read"
 	awsContentStore.setAcl()
 	if awsContentStore.acl != s3.PublicRead {
 		t.Fatalf("Should have been set to public-read, but got %s", awsContentStore.acl)
 	}
-	Config.Aws.BucketAcl = "public-read-write"
+	config.Config.Aws.BucketAcl = "public-read-write"
 	awsContentStore.setAcl()
 	if awsContentStore.acl != s3.PublicReadWrite {
 		t.Fatalf("Should have been set to public-read-write, but got %s", awsContentStore.acl)
 	}
-	Config.Aws.BucketAcl = "authenticated-read"
+	config.Config.Aws.BucketAcl = "authenticated-read"
 	awsContentStore.setAcl()
 	if awsContentStore.acl != s3.AuthenticatedRead {
 		t.Fatalf("Should have been set to authenticated-read, but got %s", awsContentStore.acl)
 	}
-	Config.Aws.BucketAcl = "bucket-owner-read"
+	config.Config.Aws.BucketAcl = "bucket-owner-read"
 	awsContentStore.setAcl()
 	if awsContentStore.acl != s3.BucketOwnerRead {
 		t.Fatalf("Should have been set to bucket-owner-read, but got %s", awsContentStore.acl)
 	}
-	Config.Aws.BucketAcl = "bucket-owner-full-control"
+	config.Config.Aws.BucketAcl = "bucket-owner-full-control"
 	awsContentStore.setAcl()
 	if awsContentStore.acl != s3.BucketOwnerFull {
 		t.Fatalf("Should have been set to bucket-owner-full-control, but got %s", awsContentStore.acl)
 	}
 }
 
-func awsConnectForTest() *s3.Bucket {
-	os.Setenv("AWS_ACCESS_KEY_ID", Config.Aws.AccessKeyId)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", Config.Aws.SecretAccessKey)
-	auth, err := aws.EnvAuth()
-	perror(err)
-	return s3.New(auth, aws.Regions[Config.Aws.Region]).Bucket(Config.Aws.BucketName)
+func awsConnectForTest() (*s3.Bucket, error) {
+	os.Setenv("AWS_ACCESS_KEY_ID", config.Config.Aws.AccessKeyId)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", config.Config.Aws.SecretAccessKey)
+	auth, err := aws_.EnvAuth()
+	if err != nil {
+		return nil, err
+	}
+	return s3.New(
+		auth,
+		aws_.Regions[config.Config.Aws.Region],
+	).Bucket(config.Config.Aws.BucketName), nil
 }
 
 func setupAwsTest() {
-	bucket := awsConnectForTest()
+	bucket, err := awsConnectForTest()
+	if err != nil {
+		fmt.Printf("error initializing content store: %s\n", err)
+		os.Exit(1)
+	}
 	bucket.PutBucket(s3.Private)
 	store, err := NewAwsContentStore()
 	if err != nil {
@@ -211,7 +223,10 @@ func setupAwsTest() {
 }
 
 func teardownAwsTest() {
-	bucket := awsConnectForTest()
+	bucket, err := awsConnectForTest()
+	if err != nil {
+		return
+	}
 	// remove all bucket contents
 	items, err := bucket.List("", "", "", 1000)
 	if err != nil {

@@ -1,7 +1,10 @@
-package main
+package cassandra
 
 import (
 	"fmt"
+
+	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
 
 	"github.com/gocql/gocql"
 )
@@ -11,21 +14,49 @@ type CassandraService struct {
 }
 
 // TODO: Add auth for cassandra
-func NewCassandraSession() *CassandraService {
-	cluster := gocql.NewCluster(Config.Cassandra.Hosts)
-	cluster.ProtoVersion = Config.Cassandra.ProtoVersion
-	q := fmt.Sprintf("create keyspace if not exists %s_%s with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };", Config.Cassandra.Keyspace, GoEnv)
+func NewCassandraSession() (*CassandraService, error) {
+	cluster := gocql.NewCluster(config.Config.Cassandra.Hosts)
+	cluster.ProtoVersion = config.Config.Cassandra.ProtoVersion
+
+	logger.Log("Connecting to " + config.Config.Cassandra.Hosts)
+
+	keyspace := fmt.Sprintf("%s_%s", config.Config.Cassandra.Keyspace, config.GoEnv)
+	logger.Log("Using keyspace " + keyspace)
+
+	q := fmt.Sprintf(`
+		create keyspace if not exists
+			%s
+		with replication = {
+			'class': 'SimpleStrategy',
+			'replication_factor': 1
+		};
+	`, keyspace)
+
 	session, err := cluster.CreateSession()
+	if err != nil {
+		return nil, err
+	}
+
 	err = session.Query(q).Exec()
+	if err != nil {
+		return nil, err
+	}
 	session.Close()
-	cluster.Keyspace = fmt.Sprintf("%s_%s", Config.Cassandra.Keyspace, GoEnv)
+
+	cluster.Keyspace = keyspace
 	cluster.Consistency = gocql.Quorum
+
 	session, err = cluster.CreateSession()
-	perror(initializeCassandra(session))
-	perror(err)
-	logger.Log(kv{"fn": "cassandra_service", "msg": fmt.Sprintf("Connecting to host '%s'\n", Config.Cassandra.Hosts)})
-	logger.Log(kv{"fn": "cassandra_service", "msg": fmt.Sprintf("Cassandra.namespace '%s_%s'\n", Config.Cassandra.Keyspace, GoEnv)})
-	return &CassandraService{Client: session}
+	if err != nil {
+		return nil, err
+	}
+
+	err = initializeCassandra(session)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CassandraService{Client: session}, nil
 }
 
 func initializeCassandra(session *gocql.Session) error {
@@ -63,9 +94,11 @@ func initializeCassandra(session *gocql.Session) error {
 }
 
 func DropCassandra(session *gocql.Session) error {
-	config := Config.Cassandra
-	m := fmt.Sprintf("%s_%s", config.Keyspace, GoEnv)
+	m := fmt.Sprintf("%s_%s", config.Config.Cassandra.Keyspace, config.GoEnv)
 	q := fmt.Sprintf("drop keyspace %s;", m)
-	c := NewCassandraSession().Client
-	return c.Query(q).Exec()
+	sess, err := NewCassandraSession()
+	if err != nil {
+		return err
+	}
+	return sess.Client.Query(q).Exec()
 }

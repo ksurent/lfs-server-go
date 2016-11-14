@@ -1,16 +1,27 @@
-package main
+package aws
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
 	"strings"
 
-	"github.com/mitchellh/goamz/aws"
+	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/content"
+	"github.com/ksurent/lfs-server-go/logger"
+	"github.com/ksurent/lfs-server-go/meta"
+
+	aws_ "github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
+)
+
+var (
+	errNotImplemented = errors.New("Not implemented")
+	errWriteS3        = errors.New("Erred writing to S3")
 )
 
 const (
@@ -28,15 +39,15 @@ type AwsContentStore struct {
 
 // NewContentStore creates a ContentStore at the base directory.
 func NewAwsContentStore() (*AwsContentStore, error) {
-	os.Setenv("AWS_ACCESS_KEY_ID", Config.Aws.AccessKeyId)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", Config.Aws.SecretAccessKey)
-	auth, err := aws.EnvAuth()
+	os.Setenv("AWS_ACCESS_KEY_ID", config.Config.Aws.AccessKeyId)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", config.Config.Aws.SecretAccessKey)
+	auth, err := aws_.EnvAuth()
 	if err != nil {
-		logger.Log(kv{"fn": "AwsContentStore.NewAwsContentStore", "err": ": " + err.Error()})
+		logger.Log(err)
 		return &AwsContentStore{}, err
 	}
-	client := s3.New(auth, aws.Regions[Config.Aws.Region])
-	bucket := client.Bucket(Config.Aws.BucketName)
+	client := s3.New(auth, aws_.Regions[config.Config.Aws.Region])
+	bucket := client.Bucket(config.Config.Aws.BucketName)
 	self := &AwsContentStore{bucket: bucket, client: client}
 	self.makeBucket()
 	self.setAcl()
@@ -47,7 +58,7 @@ func NewAwsContentStore() (*AwsContentStore, error) {
 func (s *AwsContentStore) makeBucket() error {
 	buckets, err := s.bucket.ListBuckets()
 	if err != nil {
-		logger.Log(kv{"fn": "AwsContentStore.makeBucket", "err": ": " + err.Error()})
+		logger.Log(err)
 		return err
 	}
 	var exists bool
@@ -58,25 +69,25 @@ func (s *AwsContentStore) makeBucket() error {
 		}
 	}
 	if !exists {
-		err := s.bucket.PutBucket(s3.ACL(Config.Aws.BucketAcl))
+		err := s.bucket.PutBucket(s3.ACL(config.Config.Aws.BucketAcl))
 		return err
 	}
 	return nil
 }
 
-func (s *AwsContentStore) Get(meta *MetaObject) (io.ReadCloser, error) {
-	path := transformKey(meta.Oid)
+func (s *AwsContentStore) Get(m *meta.Object) (io.ReadCloser, error) {
+	path := content.TransformKey(m.Oid)
 	return s.bucket.GetReader(path)
 }
 
-func (s *AwsContentStore) getMetaData(meta *MetaObject) (*s3.Key, error) {
-	path := transformKey(meta.Oid)
+func (s *AwsContentStore) getMetaData(m *meta.Object) (*s3.Key, error) {
+	path := content.TransformKey(m.Oid)
 	return s.bucket.GetKey(path)
 }
 
 // TODO: maybe take write errors into account and buffer/resend to amazon?
-func (s *AwsContentStore) Put(meta *MetaObject, r io.Reader) error {
-	path := transformKey(meta.Oid)
+func (s *AwsContentStore) Put(m *meta.Object, r io.Reader) error {
+	path := content.TransformKey(m.Oid)
 	/*
 		There is probably a better way to compute this but we need to write the file to memory to
 		 compute the sha256 value and make sure what we're writing is correct.
@@ -87,38 +98,38 @@ func (s *AwsContentStore) Put(meta *MetaObject, r io.Reader) error {
 	hw := io.MultiWriter(hash)
 	written, err := io.Copy(hw, bytes.NewReader(buf))
 	if err != nil {
-		logger.Log(kv{"fn": "AwsContentStore.Put", "err": ": " + err.Error()})
+		logger.Log(err)
 		return err
 	}
 	// Check that we've written out the entire file for computing the sha
-	if written != meta.Size {
-		return errSizeMismatch
+	if written != m.Size {
+		return content.ErrSizeMismatch
 	}
 	shaStr := hex.EncodeToString(hash.Sum(nil))
-	if shaStr != meta.Oid {
-		return errHashMismatch
+	if shaStr != m.Oid {
+		return content.ErrHashMismatch
 	}
-	retStat := s.bucket.PutReader(path, bytes.NewReader(buf), meta.Size, ContentType, s.acl)
-	k, kerr := s.getMetaData(meta)
+	retStat := s.bucket.PutReader(path, bytes.NewReader(buf), m.Size, ContentType, s.acl)
+	k, kerr := s.getMetaData(m)
 	if kerr != nil {
-		logger.Log(kv{"fn": "AwsContentStore.Put", "err": ": " + kerr.Error()})
+		logger.Log(kerr)
 		return errWriteS3
 	}
-	if k.Size != meta.Size {
-		return errSizeMismatch
+	if k.Size != m.Size {
+		return content.ErrSizeMismatch
 	}
 	return retStat
 }
 
-func (s *AwsContentStore) Exists(meta *MetaObject) bool {
-	path := transformKey(meta.Oid)
+func (s *AwsContentStore) Exists(m *meta.Object) bool {
+	path := content.TransformKey(m.Oid)
 	// returns a 404 error if its not there
 	_, err := s.bucket.GetKey(path)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			return false
 		} else {
-			logger.Log(kv{"fn": "AwsContentStore.Exists", "err": ": " + err.Error()})
+			logger.Log(err)
 			return false
 		}
 	}
@@ -126,31 +137,25 @@ func (s *AwsContentStore) Exists(meta *MetaObject) bool {
 	return true
 }
 
-func (s *AwsContentStore) Verify(meta *MetaObject) error {
+func (s *AwsContentStore) Verify(m *meta.Object) error {
 	return errNotImplemented
 }
 
 func (s *AwsContentStore) setAcl() {
-	switch {
-	case Config.Aws.BucketAcl == "private":
+	switch config.Config.Aws.BucketAcl {
+	case "private":
 		s.acl = s3.Private
-		return
-	case Config.Aws.BucketAcl == "public-read":
+	case "public-read":
 		s.acl = s3.PublicRead
-		return
-	case Config.Aws.BucketAcl == "public-read-write":
+	case "public-read-write":
 		s.acl = s3.PublicReadWrite
-		return
-	case Config.Aws.BucketAcl == "authenticated-read":
+	case "authenticated-read":
 		s.acl = s3.AuthenticatedRead
-		return
-	case Config.Aws.BucketAcl == "bucket-owner-read":
+	case "bucket-owner-read":
 		s.acl = s3.BucketOwnerRead
-		return
-	case Config.Aws.BucketAcl == "bucket-owner-full-control":
+	case "bucket-owner-full-control":
 		s.acl = s3.BucketOwnerFull
-		return
+	default:
+		s.acl = s3.Private
 	}
-	s.acl = s3.Private
-	return
 }

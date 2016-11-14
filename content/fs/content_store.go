@@ -1,4 +1,4 @@
-package main
+package fs
 
 import (
 	"bufio"
@@ -7,6 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/ksurent/lfs-server-go/content"
+	"github.com/ksurent/lfs-server-go/meta"
 )
 
 // ContentStore provides a simple file system based storage.
@@ -25,15 +28,15 @@ func NewContentStore(base string) (*ContentStore, error) {
 
 // Get takes a Meta object and retreives the content from the store, returning
 // it as an io.Reader.
-func (s *ContentStore) Get(meta *MetaObject) (io.ReadCloser, error) {
-	path := filepath.Join(s.basePath, transformKey(meta.Oid))
+func (s *ContentStore) Get(m *meta.Object) (io.ReadCloser, error) {
+	path := filepath.Join(s.basePath, content.TransformKey(m.Oid))
 
 	return os.Open(path)
 }
 
 // Put takes a Meta object and an io.Reader and writes the content to the store.
-func (s *ContentStore) Put(meta *MetaObject, r io.Reader) error {
-	path := filepath.Join(s.basePath, transformKey(meta.Oid))
+func (s *ContentStore) Put(m *meta.Object, r io.Reader) error {
+	path := filepath.Join(s.basePath, content.TransformKey(m.Oid))
 	tmpPath := path + ".tmp"
 
 	dir := filepath.Dir(path)
@@ -57,13 +60,13 @@ func (s *ContentStore) Put(meta *MetaObject, r io.Reader) error {
 	}
 	file.Close()
 
-	if written != meta.Size {
-		return errSizeMismatch
+	if written != m.Size {
+		return content.ErrSizeMismatch
 	}
 
 	shaStr := hex.EncodeToString(hash.Sum(nil))
-	if shaStr != meta.Oid {
-		return errHashMismatch
+	if shaStr != m.Oid {
+		return content.ErrHashMismatch
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
@@ -73,23 +76,23 @@ func (s *ContentStore) Put(meta *MetaObject, r io.Reader) error {
 }
 
 // Exists returns true if the object exists in the content store.
-func (s *ContentStore) Exists(meta *MetaObject) bool {
-	path := filepath.Join(s.basePath, transformKey(meta.Oid))
+func (s *ContentStore) Exists(m *meta.Object) bool {
+	path := filepath.Join(s.basePath, content.TransformKey(m.Oid))
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return false
 	}
 	return true
 }
 
-func (s *ContentStore) Verify(meta *MetaObject) error {
-	path := filepath.Join(s.basePath, transformKey(meta.Oid))
+func (s *ContentStore) Verify(m *meta.Object) error {
+	path := filepath.Join(s.basePath, content.TransformKey(m.Oid))
 
 	stat, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
-	if stat.Size() != meta.Size {
-		return errSizeMismatch
+	if stat.Size() != m.Size {
+		return content.ErrSizeMismatch
 	}
 
 	fh, err := os.Open(path)
@@ -106,8 +109,8 @@ func (s *ContentStore) Verify(meta *MetaObject) error {
 	}
 
 	shaStr := hex.EncodeToString(hash.Sum(nil))
-	if shaStr != meta.Oid {
-		return errHashMismatch
+	if shaStr != m.Oid {
+		return content.ErrHashMismatch
 	}
 
 	return nil

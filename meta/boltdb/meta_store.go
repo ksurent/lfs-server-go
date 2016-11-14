@@ -1,15 +1,19 @@
-package main
+package boltdb
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/gob"
 	"errors"
+	"strings"
 	"time"
 
-	"encoding/base64"
-	"fmt"
+	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/extauth/ldap"
+	"github.com/ksurent/lfs-server-go/logger"
+	"github.com/ksurent/lfs-server-go/meta"
+
 	"github.com/boltdb/bolt"
-	"strings"
 )
 
 // MetaStore implements a metadata storage. It stores user credentials and Meta information
@@ -19,7 +23,8 @@ type MetaStore struct {
 }
 
 var (
-	errNoBucket = errors.New("Bucket not found")
+	errNoBucket    = errors.New("Bucket not found")
+	errUnsupported = errors.New("This feature is not supported by this backend")
 )
 
 var (
@@ -55,38 +60,33 @@ func NewMetaStore(dbFile string) (*MetaStore, error) {
 }
 
 // Get() retrieves meta information for a committed object given information in
-// RequestVars
-func (s *MetaStore) Get(rv *RequestVars) (*MetaObject, error) {
+// meta.RequestVars
+func (s *MetaStore) Get(rv *meta.RequestVars) (*meta.Object, error) {
 	if !s.authenticate(rv.Authorization) {
-		return nil, newAuthError()
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := s.doGet(rv)
+	m, err := s.doGet(rv)
 	if err != nil {
 		return nil, err
-	} else if !meta.Existing {
-		return nil, errObjectNotFound
+	} else if !m.Existing {
+		return nil, meta.ErrObjectNotFound
 	}
 
-	return meta, nil
+	return m, nil
 }
 
 // Same as Get() but for uncommitted objects
-func (s *MetaStore) GetPending(rv *RequestVars) (*MetaObject, error) {
+func (s *MetaStore) GetPending(rv *meta.RequestVars) (*meta.Object, error) {
 	if !s.authenticate(rv.Authorization) {
-		return nil, newAuthError()
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := s.doGet(rv)
-	if err != nil {
-		return nil, err
-	}
-
-	return meta, nil
+	return s.doGet(rv)
 }
 
-func (s *MetaStore) doGet(rv *RequestVars) (*MetaObject, error) {
-	var meta MetaObject
+func (s *MetaStore) doGet(rv *meta.RequestVars) (*meta.Object, error) {
+	var m meta.Object
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(objectsBucket)
 		if bucket == nil {
@@ -95,24 +95,22 @@ func (s *MetaStore) doGet(rv *RequestVars) (*MetaObject, error) {
 
 		value := bucket.Get([]byte(rv.Oid))
 		if len(value) == 0 {
-			return errObjectNotFound
+			return meta.ErrObjectNotFound
 		}
 
 		dec := gob.NewDecoder(bytes.NewBuffer(value))
-		return dec.Decode(&meta)
+		return dec.Decode(&m)
 	})
 
 	if err != nil {
-		logger.Log(kv{"fn": "MetaStore.doGet", "msg": err.Error()})
 		return nil, err
 	}
 
-	return &meta, nil
+	return &m, nil
 }
 
-func (s *MetaStore) findProject(projectName string) (*MetaProject, error) {
-	// var projects []*MetaProject
-	var project *MetaProject
+func (s *MetaStore) findProject(projectName string) (*meta.Project, error) {
+	var project *meta.Project
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(projectsBucket)
 		if bucket == nil {
@@ -120,7 +118,7 @@ func (s *MetaStore) findProject(projectName string) (*MetaProject, error) {
 		}
 		val := bucket.Get([]byte(projectName))
 		if len(val) < 1 {
-			return errProjectNotFound
+			return meta.ErrProjectNotFound
 		}
 		dec := gob.NewDecoder(bytes.NewBuffer(val))
 		return dec.Decode(&project)
@@ -131,11 +129,11 @@ func (s *MetaStore) findProject(projectName string) (*MetaProject, error) {
 	if project.Name != "" {
 		return project, nil
 	}
-	return nil, errProjectNotFound
+	return nil, meta.ErrProjectNotFound
 }
 
 // Currently the OIDS are nil
-func (s *MetaStore) createProject(rv *RequestVars) error {
+func (s *MetaStore) createProject(rv *meta.RequestVars) error {
 	if _, err := s.findProject(rv.Repo); err == nil {
 		// already there
 		return nil
@@ -152,8 +150,8 @@ func (s *MetaStore) createProject(rv *RequestVars) error {
 		}
 		var buf bytes.Buffer
 		enc := gob.NewEncoder(&buf)
-		meta := MetaProject{Name: rv.Repo, Oids: []string{rv.Oid}}
-		err := enc.Encode(meta)
+		m := meta.Project{Name: rv.Repo, Oids: []string{rv.Oid}}
+		err := enc.Encode(m)
 		// Just a bunch o keys
 		err = bucket.Put([]byte(rv.Repo), buf.Bytes())
 		if err != nil {
@@ -165,67 +163,66 @@ func (s *MetaStore) createProject(rv *RequestVars) error {
 	return err
 }
 
-// Put() creates uncommitted objects from RequestVars and stores them in the
+// Put() creates uncommitted objects from meta.RequestVars and stores them in the
 // meta store
-func (s *MetaStore) Put(rv *RequestVars) (*MetaObject, error) {
+func (s *MetaStore) Put(rv *meta.RequestVars) (*meta.Object, error) {
 	if !s.authenticate(rv.Authorization) {
-		return nil, newAuthError()
+		return nil, meta.ErrNotAuthenticated
 	}
 
 	// Don't care here if it's pending or committed
-	if meta, err := s.doGet(rv); err == nil {
-		return meta, nil
+	if m, err := s.doGet(rv); err == nil {
+		return m, nil
 	}
 
 	if rv.Repo != "" {
 		err := s.createProject(rv)
 		if err != nil {
-			logger.Log(kv{"fn": "Put", "err": err.Error()})
 			return nil, err
 		}
 	}
 
-	meta := &MetaObject{
+	m := &meta.Object{
 		Oid:          rv.Oid,
 		Size:         rv.Size,
 		ProjectNames: []string{rv.Repo},
 		Existing:     false,
 	}
 
-	err := s.doPut(meta)
+	err := s.doPut(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return meta, nil
+	return m, nil
 }
 
 // Commit() finds uncommitted objects in the meta store using data in
-// RequestVars and commits them
-func (s *MetaStore) Commit(rv *RequestVars) (*MetaObject, error) {
+// meta.RequestVars and commits them
+func (s *MetaStore) Commit(rv *meta.RequestVars) (*meta.Object, error) {
 	if !s.authenticate(rv.Authorization) {
-		return nil, newAuthError()
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := s.GetPending(rv)
+	m, err := s.GetPending(rv)
 	if err != nil {
 		return nil, err
 	}
 
-	meta.Existing = true
+	m.Existing = true
 
-	err = s.doPut(meta)
+	err = s.doPut(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return meta, nil
+	return m, nil
 }
 
-func (s *MetaStore) doPut(meta *MetaObject) error {
+func (s *MetaStore) doPut(m *meta.Object) error {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(meta)
+	err := enc.Encode(m)
 	if err != nil {
 		return err
 	}
@@ -236,7 +233,7 @@ func (s *MetaStore) doPut(meta *MetaObject) error {
 			return errNoBucket
 		}
 
-		err = bucket.Put([]byte(meta.Oid), buf.Bytes())
+		err = bucket.Put([]byte(m.Oid), buf.Bytes())
 		if err != nil {
 			return err
 		}
@@ -252,15 +249,15 @@ func (s *MetaStore) Close() {
 
 // AddUser adds user credentials to the meta store.
 func (s *MetaStore) AddUser(user, pass string) error {
-	if Config.Ldap.Enabled {
-		return errNotImplemented
+	if config.Config.Ldap.Enabled {
+		return ldap.ErrUseLdap
 	}
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(usersBucket)
 		if bucket == nil {
 			return errNoBucket
 		}
-		encryptedPass, err := encryptPass([]byte(pass))
+		encryptedPass, err := meta.EncryptPass([]byte(pass))
 		if err != nil {
 			return err
 		}
@@ -274,8 +271,8 @@ func (s *MetaStore) AddUser(user, pass string) error {
 
 // DeleteUser removes user credentials from the meta store.
 func (s *MetaStore) DeleteUser(user string) error {
-	if Config.Ldap.Enabled {
-		return errNotImplemented
+	if config.Config.Ldap.Enabled {
+		return ldap.ErrUseLdap
 	}
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(usersBucket)
@@ -290,12 +287,12 @@ func (s *MetaStore) DeleteUser(user string) error {
 	return err
 }
 
-// Users returns all MetaUsers in the meta store
-func (s *MetaStore) Users() ([]*MetaUser, error) {
-	if Config.Ldap.Enabled {
-		return []*MetaUser{}, errNotImplemented
+// Users returns all meta.Users in the meta store
+func (s *MetaStore) Users() ([]*meta.User, error) {
+	if config.Config.Ldap.Enabled {
+		return []*meta.User{}, ldap.ErrUseLdap
 	}
-	var users []*MetaUser
+	var users []*meta.User
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(usersBucket)
@@ -304,7 +301,7 @@ func (s *MetaStore) Users() ([]*MetaUser, error) {
 		}
 
 		bucket.ForEach(func(k, v []byte) error {
-			users = append(users, &MetaUser{Name: string(k)})
+			users = append(users, &meta.User{Name: string(k)})
 			return nil
 		})
 		return nil
@@ -313,9 +310,9 @@ func (s *MetaStore) Users() ([]*MetaUser, error) {
 	return users, err
 }
 
-// Objects returns all MetaObjects in the meta store
-func (s *MetaStore) Objects() ([]*MetaObject, error) {
-	var objects []*MetaObject
+// Objects returns all meta.Objects in the meta store
+func (s *MetaStore) Objects() ([]*meta.Object, error) {
+	var objects []*meta.Object
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(objectsBucket)
@@ -324,13 +321,13 @@ func (s *MetaStore) Objects() ([]*MetaObject, error) {
 		}
 
 		bucket.ForEach(func(k, v []byte) error {
-			var meta MetaObject
+			var m meta.Object
 			dec := gob.NewDecoder(bytes.NewBuffer(v))
-			err := dec.Decode(&meta)
+			err := dec.Decode(&m)
 			if err != nil {
 				return err
 			}
-			objects = append(objects, &meta)
+			objects = append(objects, &m)
 			return nil
 		})
 		return nil
@@ -341,7 +338,7 @@ func (s *MetaStore) Objects() ([]*MetaObject, error) {
 // authenticate uses the authorization string to determine whether
 // or not to proceed. This server assumes an HTTP Basic auth format.
 func (s *MetaStore) authenticate(authorization string) bool {
-	if Config.IsPublic() {
+	if config.Config.IsPublic() {
 		return true
 	}
 
@@ -354,7 +351,7 @@ func (s *MetaStore) authenticate(authorization string) bool {
 	}
 	c, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(authorization, "Basic "))
 	if err != nil {
-		logger.Log(kv{"fn": "meta_store.authenticate", "msg": err.Error()})
+		logger.Log(err)
 		return false
 	}
 	cs := string(c)
@@ -363,8 +360,8 @@ func (s *MetaStore) authenticate(authorization string) bool {
 		return false
 	}
 	user, password := cs[:i], cs[i+1:]
-	if Config.Ldap.Enabled {
-		return authenticateLdap(user, password)
+	if config.Config.Ldap.Enabled {
+		return ldap.AuthenticateLdap(user, password)
 	}
 	value := ""
 
@@ -377,15 +374,15 @@ func (s *MetaStore) authenticate(authorization string) bool {
 		value = string(bucket.Get([]byte(user)))
 		return nil
 	})
-	match, err := checkPass([]byte(value), []byte(password))
+	match, err := meta.CheckPass([]byte(value), []byte(password))
 	if err != nil {
-		logger.Log(kv{"fn": "meta_store.authenticate", "msg": fmt.Sprintf("Decrypt error: %s", err.Error())})
+		logger.Log(err)
 	}
 	return match
 }
 
-func (s *MetaStore) Projects() ([]*MetaProject, error) {
-	var projects []*MetaProject
+func (s *MetaStore) Projects() ([]*meta.Project, error) {
+	var projects []*meta.Project
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(projectsBucket)
 		if bucket == nil {
@@ -393,13 +390,13 @@ func (s *MetaStore) Projects() ([]*MetaProject, error) {
 		}
 
 		bucket.ForEach(func(k, v []byte) error {
-			var meta MetaProject
+			var m meta.Project
 			dec := gob.NewDecoder(bytes.NewBuffer(v))
-			err := dec.Decode(&meta)
+			err := dec.Decode(&m)
 			if err != nil {
 				return err
 			}
-			projects = append(projects, &meta)
+			projects = append(projects, &m)
 			return nil
 		})
 		return nil
@@ -407,10 +404,7 @@ func (s *MetaStore) Projects() ([]*MetaProject, error) {
 	return projects, err
 }
 
-/*
-AddProject (create a new project using POST)
-Only implemented on MySQL meta store
-*/
+// TODO
 func (s *MetaStore) AddProject(name string) error {
-	return errMySQLNotImplemented
+	return errUnsupported
 }
