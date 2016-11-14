@@ -28,7 +28,7 @@ func (m *MySQLMetaStore) Close() {
 func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
 	rows, err := m.client.Query("select oid, size from oids where pending = 0")
 	if err != nil {
-		logger.Log(logger.Kv{"fn": "MySQLMetaStore.findAllOids", "msg": err})
+		logger.Log(err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -59,7 +59,6 @@ func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
 func (m *MySQLMetaStore) mapOid(id int) ([]string, error) {
 	rows, err := m.client.Query("select oid from oid_maps where projectID = ? and pending = 0", id)
 	if err != nil {
-		logger.Log(logger.Kv{"fn": "MySQLMetaStore.mapOid", "msg": err})
 		return nil, err
 	}
 	defer rows.Close()
@@ -131,7 +130,6 @@ func (m *MySQLMetaStore) createProject(name string) error {
 func (m *MySQLMetaStore) commitPendingObject(meta *MetaObject) error {
 	tx, err := m.client.Begin()
 	if err != nil {
-		logger.Log(logger.Kv{"fn": "MySQLMetaStore.commitPendingObject", "msg": "Could not start a transaction: " + err.Error()})
 		return err
 	}
 
@@ -148,7 +146,6 @@ func (m *MySQLMetaStore) commitPendingObject(meta *MetaObject) error {
 func (m *MySQLMetaStore) createPendingObject(meta *MetaObject) error {
 	tx, err := m.client.Begin()
 	if err != nil {
-		logger.Log(logger.Kv{"fn": "MySQLMetaStore.createPendingObject", "msg": "Could not start a transaction: " + err.Error()})
 		return err
 	}
 
@@ -238,7 +235,6 @@ func (m *MySQLMetaStore) findOid(oid string, pending bool) (*MetaObject, error) 
 // meta store
 func (m *MySQLMetaStore) Put(v *RequestVars) (*MetaObject, error) {
 	if !m.authenticate(v.Authorization) {
-		logger.Log(logger.Kv{"fn": "MySQLMetaStore.Put", "msg": "Unauthorized"})
 		return nil, newAuthError()
 	}
 
@@ -270,7 +266,6 @@ func (m *MySQLMetaStore) Put(v *RequestVars) (*MetaObject, error) {
 // RequestVars and commits them
 func (m *MySQLMetaStore) Commit(v *RequestVars) (*MetaObject, error) {
 	if !m.authenticate(v.Authorization) {
-		logger.Log(logger.Kv{"fn": "MySQLMetaStore.Commit", "msg": "Unauthorized"})
 		return nil, newAuthError()
 	}
 
@@ -386,16 +381,18 @@ func (m *MySQLMetaStore) authenticate(authorization string) bool {
 	}
 
 	if authorization == "" {
+		logger.Log("No authentication info")
 		return false
 	}
 
 	if !strings.HasPrefix(authorization, "Basic ") {
+		logger.Log("Authentication info does not look like Basic HTTP")
 		return false
 	}
 
 	c, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(authorization, "Basic "))
 	if err != nil {
-		logger.Log(logger.Kv{"fn": "MySQLMetaStore.authenticate", "msg": err.Error()})
+		logger.Log(err)
 		return false
 	}
 	cs := string(c)
@@ -409,7 +406,7 @@ func (m *MySQLMetaStore) authenticate(authorization string) bool {
 		return authenticateLdap(user, password)
 	}
 
-	logger.Log(logger.Kv{"fn": "MySQLMetaStore.authenticate", "msg": "Authentication failed, please make sure LDAP is set to true"})
+	logger.Log("MySQL based authentication is not implemented, please use LDAP")
 	return false
 
 }

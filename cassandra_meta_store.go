@@ -187,7 +187,6 @@ func (self *CassandraMetaStore) findAllProjects() ([]*MetaProject, error) {
 // meta store
 func (self *CassandraMetaStore) Put(v *RequestVars) (*MetaObject, error) {
 	if !self.authenticate(v.Authorization) {
-		logger.Log(logger.Kv{"fn": "CassandraMetaStore.Put", "msg": "Unauthorized"})
 		return nil, newAuthError()
 	}
 
@@ -215,7 +214,6 @@ func (self *CassandraMetaStore) Put(v *RequestVars) (*MetaObject, error) {
 // RequestVars and commits them
 func (self *CassandraMetaStore) Commit(v *RequestVars) (*MetaObject, error) {
 	if !self.authenticate(v.Authorization) {
-		logger.Log(logger.Kv{"fn": "CassandraMetaStore.Commit", "msg": "Unauthorized"})
 		return nil, newAuthError()
 	}
 
@@ -386,22 +384,14 @@ func (self *CassandraMetaStore) Users() ([]*MetaUser, error) {
 returns all Oids
 */
 func (self *CassandraMetaStore) Objects() ([]*MetaObject, error) {
-	ao, err := self.findAllOids()
-	if err != nil {
-		logger.Log(logger.Kv{"fn": "cassandra_meta_store", "msg": err.Error()})
-	}
-	return ao, err
+	return self.findAllOids()
 }
 
 /*
 Returns a []*MetaProject
 */
 func (self *CassandraMetaStore) Projects() ([]*MetaProject, error) {
-	ao, err := self.findAllProjects()
-	if err != nil {
-		logger.Log(logger.Kv{"fn": "cassandra_meta_store", "msg": err.Error()})
-	}
-	return ao, err
+	return self.findAllProjects()
 }
 
 /*
@@ -422,16 +412,18 @@ func (self *CassandraMetaStore) authenticate(authorization string) bool {
 	}
 
 	if authorization == "" {
+		logger.Log("No authentication info")
 		return false
 	}
 
 	if !strings.HasPrefix(authorization, "Basic ") {
+		logger.Log("Authentication info does not look like Basic HTTP")
 		return false
 	}
 
 	c, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(authorization, "Basic "))
 	if err != nil {
-		logger.Log(logger.Kv{"fn": "cassandra_meta_store.authenticate", "msg": err.Error()})
+		logger.Log(err)
 		return false
 	}
 	cs := string(c)
@@ -446,13 +438,13 @@ func (self *CassandraMetaStore) authenticate(authorization string) bool {
 	}
 	mu, err := self.findUser(user)
 	if err != nil {
-		logger.Log(logger.Kv{"fn": "cassandra_meta_store", "msg": fmt.Sprintf("Auth error: %s", err.Error())})
+		logger.Log(err)
 		return false
 	}
 
 	match, err := checkPass([]byte(mu.Password), []byte(password))
 	if err != nil {
-		logger.Log(logger.Kv{"fn": "cassandra_meta_store", "msg": fmt.Sprintf("Decrypt error: %s", err.Error())})
+		logger.Log(err)
 	}
 	return match
 }

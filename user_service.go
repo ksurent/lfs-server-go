@@ -55,7 +55,7 @@ func NewUserService(base string, username string, project string, action string)
 	// TODO: Find a way to stub this without the ghetto "Filled" hack
 	us.UserAccessResponse = &UserAccessResponse{Filled: false}
 	if us.vetAction() != true {
-		logger.Log(logger.Kv{"fn": "NewUserService", "action": fmt.Sprintf("%s is not in AllowedActions", action)})
+		logger.Log(action + " is not in AllowedActions")
 		us.UserAccessResponse.Message = fmt.Sprintf("%s is not in AllowedActions", us.Action)
 	}
 	return us

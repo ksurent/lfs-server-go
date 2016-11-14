@@ -81,7 +81,7 @@ func (l *TrackingListener) Accept() (net.Conn, error) {
 // connections have finished.
 func (l *TrackingListener) WaitForChildren() {
 	l.wg.Wait()
-	logger.Log(logger.Kv{"fn": "shutdown"})
+	logger.Log("Shutting down")
 }
 
 type trackedConn struct {

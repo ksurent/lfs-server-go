@@ -26,8 +26,8 @@ func NewCassandraSession() *CassandraService {
 	session, err = cluster.CreateSession()
 	perror(initializeCassandra(session))
 	perror(err)
-	logger.Log(logger.Kv{"fn": "cassandra_service", "msg": fmt.Sprintf("Connecting to host '%s'\n", config.Config.Cassandra.Hosts)})
-	logger.Log(logger.Kv{"fn": "cassandra_service", "msg": fmt.Sprintf("Cassandra.namespace '%s_%s'\n", config.Config.Cassandra.Keyspace, config.GoEnv)})
+	logger.Log("Connecting to " + config.Config.Cassandra.Hosts)
+	logger.Log("Namespace is " + config.Config.Cassandra.Keyspace + "_" + config.GoEnv)
 	return &CassandraService{Client: session}
 }
 
