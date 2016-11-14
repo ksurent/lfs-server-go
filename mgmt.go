@@ -3,12 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/GeertJohan/go.rice"
-	"github.com/gorilla/mux"
 	"html/template"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/ksurent/lfs-server-go/config"
+
+	"github.com/GeertJohan/go.rice"
+	"github.com/gorilla/mux"
 )
 
 var (
@@ -19,7 +22,7 @@ var (
 
 type pageData struct {
 	Name       string
-	Config     *Configuration
+	Config     *config.Configuration
 	ConfigDump map[string]interface{}
 	Users      []*MetaUser
 	Objects    []*MetaObject
@@ -73,7 +76,7 @@ func jsHandler(w http.ResponseWriter, r *http.Request) {
 
 func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if Config.AdminUser == "" || Config.AdminPass == "" {
+		if config.Config.AdminUser == "" || config.Config.AdminPass == "" {
 			writeStatus(w, r, 404)
 			return
 		}
@@ -85,7 +88,7 @@ func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if user != Config.AdminUser || pass != Config.AdminPass {
+		if user != config.Config.AdminUser || pass != config.Config.AdminPass {
 			w.Header().Set("WWW-Authenticate", "Basic realm=mgmt")
 			writeStatus(w, r, 401)
 			return
@@ -99,13 +102,13 @@ func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 func (a *App) indexHandler(w http.ResponseWriter, r *http.Request) {
 	if isJson(r) {
 		w.Header().Set("Content-Type", "application/json")
-		_json, err := json.Marshal(pageData{Name: "index", Config: Config, ConfigDump: Config.DumpConfig()})
+		_json, err := json.Marshal(pageData{Name: "index", Config: config.Config, ConfigDump: config.Config.DumpConfig()})
 		if err != nil {
 			writeStatus(w, r, 500)
 		}
 		w.Write(_json)
 	} else {
-		if err := render(w, "config.tmpl", pageData{Name: "index", Config: Config, ConfigDump: Config.DumpConfig()}); err != nil {
+		if err := render(w, "config.tmpl", pageData{Name: "index", Config: config.Config, ConfigDump: config.Config.DumpConfig()}); err != nil {
 			writeStatus(w, r, 404)
 		}
 	}

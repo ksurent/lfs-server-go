@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"strings"
+
+	"github.com/ksurent/lfs-server-go/config"
 )
 
 type MySQLMetaStore struct {
@@ -378,7 +380,7 @@ Auth routine.  Requires an auth string like
 "Basic YWRtaW46YWRtaW4="
 */
 func (m *MySQLMetaStore) authenticate(authorization string) bool {
-	if Config.IsPublic() {
+	if config.Config.IsPublic() {
 		return true
 	}
 
@@ -402,7 +404,7 @@ func (m *MySQLMetaStore) authenticate(authorization string) bool {
 	}
 	user, password := cs[:i], cs[i+1:]
 
-	if Config.Ldap.Enabled {
+	if config.Config.Ldap.Enabled {
 		return authenticateLdap(user, password)
 	}
 

@@ -11,7 +11,7 @@ var (
 )
 
 func TestMySQLConfiguration(t *testing.T) {
-	Config.MySQL = &MySQLConfig{
+	config.Config.MySQL = &config.MySQLConfig{
 		Enabled:  true,
 		Host:     "127.0.0.1:3306",
 		Database: "lfs_server_go_test",
@@ -168,22 +168,22 @@ func TestMySQLGetWithoutAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	_, err := metaStoreTestMySQL.Get(&RequestVars{Authorization: badAuth, Oid: noAuthOid})
+	_, err := metaStoreTestMySQL.Get(&m.RequestVars{Authorization: badAuth, Oid: noAuthOid})
 	if !isAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
-	_, err = metaStoreTestMySQL.Get(&RequestVars{Oid: noAuthOid})
+	_, err = metaStoreTestMySQL.Get(&m.RequestVars{Oid: noAuthOid})
 	if !isAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
 
 func setupMySQLMeta() error {
-	// Setup Config
-	Config.Ldap = &LdapConfig{Enabled: true, Server: "ldap://localhost:1389", Base: "o=company",
+	// Setup config.Config
+	config.Config.Ldap = &config.LdapConfig{Enabled: true, Server: "ldap://localhost:1389", Base: "o=company",
 		UserObjectClass: "posixaccount", UserCn: "uid", BindPass: "admin"}
-	Config.MySQL = &MySQLConfig{
+	config.Config.MySQL = &config.MySQLConfig{
 		Enabled:  true,
 		Host:     "127.0.0.1:3306",
 		Username: "lfs_server",

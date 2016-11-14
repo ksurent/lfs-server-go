@@ -314,14 +314,14 @@ var (
 )
 
 func baseURL() string {
-	return fmt.Sprintf("%s://%s", Config.Scheme, Config.Host)
+	return fmt.Sprintf("%s://%s", config.Config.Scheme, config.Config.Host)
 }
 
 func TestMain(m *testing.M) {
 	os.Remove("lfs-test.db")
-	Config.Ldap.Enabled = false
+	config.Config.Ldap.Enabled = false
 	var err error
-	testMetaStore, err = NewMetaStore(Config.MetaDB)
+	testMetaStore, err = NewMetaStore(config.Config.MetaDB)
 	if err != nil {
 		fmt.Printf("Error creating meta store: %s", err)
 		os.Exit(1)

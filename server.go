@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ksurent/lfs-server-go/config"
+
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
 )
@@ -84,22 +86,22 @@ type GenericContentStore interface {
 func (v *RequestVars) ObjectLink() string {
 	path := fmt.Sprintf("/%s/%s/objects/%s", v.Namespace, v.Repo, v.Oid)
 
-	if Config.IsHTTPS() {
-		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
+	if config.Config.IsHTTPS() {
+		return fmt.Sprintf("%s://%s%s", config.Config.Scheme, config.Config.Host, path)
 	}
 
-	return fmt.Sprintf("http://%s%s", Config.Host, path)
+	return fmt.Sprintf("http://%s%s", config.Config.Host, path)
 }
 
 // VerifyLink builds a URL used to verify uploaded files.
 func (v *RequestVars) VerifyLink() string {
 	path := fmt.Sprintf("/%s/%s/verify", v.Namespace, v.Repo)
 
-	if Config.IsHTTPS() {
-		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
+	if config.Config.IsHTTPS() {
+		return fmt.Sprintf("%s://%s%s", config.Config.Scheme, config.Config.Host, path)
 	}
 
-	return fmt.Sprintf("http://%s%s", Config.Host, path)
+	return fmt.Sprintf("http://%s%s", config.Config.Host, path)
 }
 
 // link provides a structure used to build a hypermedia representation of an HTTP link.

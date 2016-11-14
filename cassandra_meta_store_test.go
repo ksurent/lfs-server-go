@@ -74,13 +74,13 @@ func TestCassandraUsers(t *testing.T) {
 		t.Errorf("Adding a user failed")
 	}
 
-	Config.Ldap.Enabled = true
+	config.Config.Ldap.Enabled = true
 
 	_, luErr := metaStoreTestCassandra.Users()
 	if luErr == nil {
 		t.Errorf("Expected to raise error when trying to check users with ldap enabled")
 	}
-	Config.Ldap.Enabled = false
+	config.Config.Ldap.Enabled = false
 
 	uErr := metaStoreTestCassandra.DeleteUser(testUser)
 	if uErr != nil {

@@ -3,9 +3,12 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
+
+	"github.com/ksurent/lfs-server-go/config"
+
 	"github.com/gocql/gocql"
 	"github.com/relops/cqlr"
-	"strings"
 )
 
 type CassandraMetaStore struct {
@@ -334,7 +337,7 @@ func (self *CassandraMetaStore) findUser(user string) (*MetaUser, error) {
 Adds a user to the system, only for use when not using ldap
 */
 func (self *CassandraMetaStore) AddUser(user, pass string) error {
-	if Config.Ldap.Enabled {
+	if config.Config.Ldap.Enabled {
 		return errNotImplemented
 	}
 	_, uErr := self.findUser(user)
@@ -355,7 +358,7 @@ Removes a user from the system, only for use when not using ldap
 Usage: DeleteUser("testuser")
 */
 func (self *CassandraMetaStore) DeleteUser(user string) error {
-	if Config.Ldap.Enabled {
+	if config.Config.Ldap.Enabled {
 		return errNotImplemented
 	}
 	return self.client.Query("delete from users where username = ?", user).Exec()
@@ -365,7 +368,7 @@ func (self *CassandraMetaStore) DeleteUser(user string) error {
 returns all users, only for use when not using ldap
 */
 func (self *CassandraMetaStore) Users() ([]*MetaUser, error) {
-	if Config.Ldap.Enabled {
+	if config.Config.Ldap.Enabled {
 		return []*MetaUser{}, errNotImplemented
 	}
 	var mu MetaUser
@@ -413,7 +416,7 @@ Auth routine.  Requires an auth string like
 "Basic YWRtaW46YWRtaW4="
 */
 func (self *CassandraMetaStore) authenticate(authorization string) bool {
-	if Config.IsPublic() {
+	if config.Config.IsPublic() {
 		return true
 	}
 
@@ -437,7 +440,7 @@ func (self *CassandraMetaStore) authenticate(authorization string) bool {
 	}
 	user, password := cs[:i], cs[i+1:]
 
-	if Config.Ldap.Enabled {
+	if config.Config.Ldap.Enabled {
 		return authenticateLdap(user, password)
 	}
 	mu, err := self.findUser(user)

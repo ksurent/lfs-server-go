@@ -34,7 +34,7 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	}
 	header := map[string][]string{"Accept": {"application/json"}, "Accept-Encoding": {"gzip", "text"}}
 	req.Header = header
-	req.SetBasicAuth(Config.AdminUser, Config.AdminPass)
+	req.SetBasicAuth(config.Config.AdminUser, config.Config.AdminPass)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("response error: %s", err)

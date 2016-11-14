@@ -4,14 +4,17 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/nmcclain/ldap"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/ksurent/lfs-server-go/config"
+
+	"github.com/nmcclain/ldap"
 )
 
 func ldapHost() (*url.URL, error) {
-	return url.Parse(Config.Ldap.Server)
+	return url.Parse(config.Config.Ldap.Server)
 }
 
 func NewLdapConnection() (*ldap.Conn, error) {
@@ -58,8 +61,8 @@ func LdapSearch(search *ldap.SearchRequest) (*ldap.SearchResult, error) {
 		logger.Log(kv{"fn": "meta_store_auth.LdapSearch", "error": err.Error()})
 		return nil, err
 	}
-	if (len(Config.Ldap.BindDn) + len(Config.Ldap.BindPass)) > 0 {
-		err = ldapCon.Bind(Config.Ldap.BindDn, Config.Ldap.BindPass)
+	if (len(config.Config.Ldap.BindDn) + len(config.Config.Ldap.BindPass)) > 0 {
+		err = ldapCon.Bind(config.Config.Ldap.BindDn, config.Config.Ldap.BindPass)
 		if err != nil {
 			logger.Log(kv{"fn": "LdapSearch", "Bind error": err.Error()})
 			return nil, err
@@ -100,11 +103,11 @@ func authenticateLdap(user, password string) bool {
 
 func findUserDn(user string) (string, error) {
 	//	fmt.Printf("Looking for user '%s'\n", user)
-	fltr := fmt.Sprintf("(&(objectclass=%s)(%s=%s))", Config.Ldap.UserObjectClass, Config.Ldap.UserCn, user)
-	//	m := fmt.Sprintf("LDAP Search \"ldapsearch -x -H '%s' -b '%s' '%s'\"\n", Config.Ldap.Server, Config.Ldap.Base, fltr)
+	fltr := fmt.Sprintf("(&(objectclass=%s)(%s=%s))", config.Config.Ldap.UserObjectClass, config.Config.Ldap.UserCn, user)
+	//	m := fmt.Sprintf("LDAP Search \"ldapsearch -x -H '%s' -b '%s' '%s'\"\n", config.Config.Ldap.Server, config.Config.Ldap.Base, fltr)
 	//	logger.Log(kv{"fn": "meta_store_auth.findUserDn", "msg": m})
 	search := &ldap.SearchRequest{
-		BaseDN:     Config.Ldap.Base,
+		BaseDN:     config.Config.Ldap.Base,
 		Filter:     fltr,
 		Scope:      1,
 		Attributes: []string{"dn"},

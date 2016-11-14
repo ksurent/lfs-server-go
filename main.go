@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ksurent/lfs-server-go/config"
+
 	"github.com/peterbourgon/g2g"
 )
 
@@ -78,9 +80,9 @@ func wrapHttps(l net.Listener, cert, key string) (net.Listener, error) {
 }
 
 func FindMetaStore() (GenericMetaStore, error) {
-	switch Config.BackingStore {
+	switch config.Config.BackingStore {
 	case "bolt":
-		m, err := NewMetaStore(Config.MetaDB)
+		m, err := NewMetaStore(config.Config.MetaDB)
 		return m, err
 	case "cassandra":
 		m, err := NewCassandraMetaStore(NewCassandraSession())
@@ -92,20 +94,20 @@ func FindMetaStore() (GenericMetaStore, error) {
 		}
 		return NewMySQLMetaStore(db)
 	default:
-		m, err := NewMetaStore(Config.MetaDB)
+		m, err := NewMetaStore(config.Config.MetaDB)
 		return m, err
 	}
 }
 
 func findContentStore() (GenericContentStore, error) {
-	logger.Log(kv{"fn": "findContentStore", "msg": fmt.Sprintf("Using ContentStore %s", Config.ContentStore)})
-	switch Config.ContentStore {
+	logger.Log(kv{"fn": "findContentStore", "msg": fmt.Sprintf("Using ContentStore %s", config.Config.ContentStore)})
+	switch config.Config.ContentStore {
 	case "filestore":
-		return NewContentStore(Config.ContentPath)
+		return NewContentStore(config.Config.ContentPath)
 	case "aws":
 		return NewAwsContentStore()
 	default:
-		return NewContentStore(Config.ContentPath)
+		return NewContentStore(config.Config.ContentPath)
 	}
 }
 func main() {
@@ -115,19 +117,19 @@ func main() {
 	}
 
 	var listener net.Listener
-	runtime.GOMAXPROCS(Config.NumProcs)
+	runtime.GOMAXPROCS(config.Config.NumProcs)
 
-	tl, err := NewTrackingListener(Config.Listen)
+	tl, err := NewTrackingListener(config.Config.Listen)
 	if err != nil {
 		logger.Fatal(kv{"fn": "main", "err": "Could not create listener: " + err.Error()})
 	}
 
 	listener = tl
 
-	if Config.IsHTTPS() {
-		if Config.UseTLS() {
+	if config.Config.IsHTTPS() {
+		if config.Config.UseTLS() {
 			logger.Log(kv{"fn": "main", "msg": "Using tls"})
-			listener, err = wrapHttps(tl, Config.Cert, Config.Key)
+			listener, err = wrapHttps(tl, config.Config.Cert, config.Config.Key)
 			if err != nil {
 				logger.Fatal(kv{"fn": "main", "err": "Could not create https listener: " + err.Error()})
 			}
@@ -158,16 +160,16 @@ func main() {
 		}
 	}(c, tl)
 
-	if Config.Graphite.Enabled {
+	if config.Config.Graphite.Enabled {
 		graphite = g2g.NewGraphite(
-			Config.Graphite.Endpoint,
-			time.Duration(Config.Graphite.IntervalS)*time.Second,
-			time.Duration(Config.Graphite.TimeoutMs)*time.Millisecond,
+			config.Config.Graphite.Endpoint,
+			time.Duration(config.Config.Graphite.IntervalS)*time.Second,
+			time.Duration(config.Config.Graphite.TimeoutMs)*time.Millisecond,
 		)
 
-		prefix := strings.Trim(Config.Graphite.Prefix, ".")
+		prefix := strings.Trim(config.Config.Graphite.Prefix, ".")
 
-		if Config.Graphite.AppendHostname {
+		if config.Config.Graphite.AppendHostname {
 			host, err := os.Hostname()
 			if err != nil {
 				logger.Log(kv{"fn": "main", "msg": "Could not detect hostname: " + err.Error()})
@@ -184,10 +186,10 @@ func main() {
 
 		setupGraphiteMetrics(prefix, graphite)
 
-		logger.Log(kv{"fn": "main", "msg": "Sending metrics", "prefix": prefix, "endpoint": Config.Graphite.Endpoint})
+		logger.Log(kv{"fn": "main", "msg": "Sending metrics", "prefix": prefix, "endpoint": config.Config.Graphite.Endpoint})
 	}
 
-	logger.Log(kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": Config.Listen, "version": BuildVersion})
+	logger.Log(kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": config.Config.Listen, "version": BuildVersion})
 
 	expvarVersion.Set(BuildVersion)
 
@@ -195,7 +197,7 @@ func main() {
 	app.Serve(listener)
 	tl.WaitForChildren()
 
-	if Config.Graphite.Enabled {
+	if config.Config.Graphite.Enabled {
 		graphite.Shutdown()
 	}
 }

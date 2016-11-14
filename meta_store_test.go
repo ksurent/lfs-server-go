@@ -102,14 +102,14 @@ func TestPuthWithoutAuth(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	_, err := metaStoreTest.Put(&RequestVars{Authorization: badAuth, Oid: contentOid, Size: 42})
+	_, err := metaStoreTest.Put(&m.RequestVars{Authorization: badAuth, Oid: contentOid, Size: 42})
 	if !isAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
 
 func setupMeta() {
-	Config.Ldap.Enabled = false
+	config.Config.Ldap.Enabled = false
 	store, err := NewMetaStore("test-meta-store.db")
 	if err != nil {
 		fmt.Printf("error initializing test meta store: %s\n", err)

@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ksurent/lfs-server-go/config"
+
 	"github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
 )
@@ -28,15 +30,15 @@ type AwsContentStore struct {
 
 // NewContentStore creates a ContentStore at the base directory.
 func NewAwsContentStore() (*AwsContentStore, error) {
-	os.Setenv("AWS_ACCESS_KEY_ID", Config.Aws.AccessKeyId)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", Config.Aws.SecretAccessKey)
+	os.Setenv("AWS_ACCESS_KEY_ID", config.Config.Aws.AccessKeyId)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", config.Config.Aws.SecretAccessKey)
 	auth, err := aws.EnvAuth()
 	if err != nil {
 		logger.Log(kv{"fn": "AwsContentStore.NewAwsContentStore", "err": ": " + err.Error()})
 		return &AwsContentStore{}, err
 	}
-	client := s3.New(auth, aws.Regions[Config.Aws.Region])
-	bucket := client.Bucket(Config.Aws.BucketName)
+	client := s3.New(auth, aws.Regions[config.Config.Aws.Region])
+	bucket := client.Bucket(config.Config.Aws.BucketName)
 	self := &AwsContentStore{bucket: bucket, client: client}
 	self.makeBucket()
 	self.setAcl()
@@ -58,7 +60,7 @@ func (s *AwsContentStore) makeBucket() error {
 		}
 	}
 	if !exists {
-		err := s.bucket.PutBucket(s3.ACL(Config.Aws.BucketAcl))
+		err := s.bucket.PutBucket(s3.ACL(config.Config.Aws.BucketAcl))
 		return err
 	}
 	return nil
@@ -131,26 +133,20 @@ func (s *AwsContentStore) Verify(meta *MetaObject) error {
 }
 
 func (s *AwsContentStore) setAcl() {
-	switch {
-	case Config.Aws.BucketAcl == "private":
+	switch config.Config.Aws.BucketAcl {
+	case "private":
 		s.acl = s3.Private
-		return
-	case Config.Aws.BucketAcl == "public-read":
+	case "public-read":
 		s.acl = s3.PublicRead
-		return
-	case Config.Aws.BucketAcl == "public-read-write":
+	case "public-read-write":
 		s.acl = s3.PublicReadWrite
-		return
-	case Config.Aws.BucketAcl == "authenticated-read":
+	case "authenticated-read":
 		s.acl = s3.AuthenticatedRead
-		return
-	case Config.Aws.BucketAcl == "bucket-owner-read":
+	case "bucket-owner-read":
 		s.acl = s3.BucketOwnerRead
-		return
-	case Config.Aws.BucketAcl == "bucket-owner-full-control":
+	case "bucket-owner-full-control":
 		s.acl = s3.BucketOwnerFull
-		return
+	default:
+		s.acl = s3.Private
 	}
-	s.acl = s3.Private
-	return
 }

@@ -2,11 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/nmcclain/ldap"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/ksurent/lfs-server-go/config"
+
+	"github.com/nmcclain/ldap"
 )
 
 var ()
@@ -52,8 +55,8 @@ func TestLdapBind(t *testing.T) {
 func TestLdapSearch(t *testing.T) {
 	setupMetaAuth()
 	defer tearDownMetaAuth()
-	fltr := fmt.Sprintf("(&(objectClass=%s)(%s=%s))", Config.Ldap.UserObjectClass, Config.Ldap.UserCn, testUser)
-	base := fmt.Sprintf("%s=%s,%s", Config.Ldap.UserCn, testUser, Config.Ldap.Base)
+	fltr := fmt.Sprintf("(&(objectClass=%s)(%s=%s))", config.Config.Ldap.UserObjectClass, config.Config.Ldap.UserCn, testUser)
+	base := fmt.Sprintf("%s=%s,%s", config.Config.Ldap.UserCn, testUser, config.Config.Ldap.Base)
 	search := &ldap.SearchRequest{
 		BaseDN: base,
 		Filter: fltr,
@@ -75,13 +78,13 @@ func TestLdapSearch(t *testing.T) {
 
 func tearDownMetaAuth() error {
 	// Set back to defaults
-	Config.Ldap = &LdapConfig{Enabled: false, Server: "ldap://localhost:1389", Base: "dc=testers,c=test,o=company",
+	config.Config.Ldap = &config.LdapConfig{Enabled: false, Server: "ldap://localhost:1389", Base: "dc=testers,c=test,o=company",
 		UserObjectClass: "objectclass=person", UserCn: "uid"}
 	exec.Command("pkill test_ldap_server").Run()
 	return nil
 }
 func setupMetaAuth() error {
-	Config.Ldap = &LdapConfig{Enabled: true, Server: "ldap://localhost:1389", Base: "o=company",
+	config.Config.Ldap = &config.LdapConfig{Enabled: true, Server: "ldap://localhost:1389", Base: "o=company",
 		UserObjectClass: "posixaccount", UserCn: "uid", BindPass: "admin"}
 	rme := exec.Command("test_ldap_server/test_ldap_server")
 	wd, _ := os.Getwd()
