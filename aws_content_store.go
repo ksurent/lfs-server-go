@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
 
 	"github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
@@ -34,7 +35,7 @@ func NewAwsContentStore() (*AwsContentStore, error) {
 	os.Setenv("AWS_SECRET_ACCESS_KEY", config.Config.Aws.SecretAccessKey)
 	auth, err := aws.EnvAuth()
 	if err != nil {
-		logger.Log(kv{"fn": "AwsContentStore.NewAwsContentStore", "err": ": " + err.Error()})
+		logger.Log(logger.Kv{"fn": "AwsContentStore.NewAwsContentStore", "err": ": " + err.Error()})
 		return &AwsContentStore{}, err
 	}
 	client := s3.New(auth, aws.Regions[config.Config.Aws.Region])
@@ -49,7 +50,7 @@ func NewAwsContentStore() (*AwsContentStore, error) {
 func (s *AwsContentStore) makeBucket() error {
 	buckets, err := s.bucket.ListBuckets()
 	if err != nil {
-		logger.Log(kv{"fn": "AwsContentStore.makeBucket", "err": ": " + err.Error()})
+		logger.Log(logger.Kv{"fn": "AwsContentStore.makeBucket", "err": ": " + err.Error()})
 		return err
 	}
 	var exists bool
@@ -89,7 +90,7 @@ func (s *AwsContentStore) Put(meta *MetaObject, r io.Reader) error {
 	hw := io.MultiWriter(hash)
 	written, err := io.Copy(hw, bytes.NewReader(buf))
 	if err != nil {
-		logger.Log(kv{"fn": "AwsContentStore.Put", "err": ": " + err.Error()})
+		logger.Log(logger.Kv{"fn": "AwsContentStore.Put", "err": ": " + err.Error()})
 		return err
 	}
 	// Check that we've written out the entire file for computing the sha
@@ -103,7 +104,7 @@ func (s *AwsContentStore) Put(meta *MetaObject, r io.Reader) error {
 	retStat := s.bucket.PutReader(path, bytes.NewReader(buf), meta.Size, ContentType, s.acl)
 	k, kerr := s.getMetaData(meta)
 	if kerr != nil {
-		logger.Log(kv{"fn": "AwsContentStore.Put", "err": ": " + kerr.Error()})
+		logger.Log(logger.Kv{"fn": "AwsContentStore.Put", "err": ": " + kerr.Error()})
 		return errWriteS3
 	}
 	if k.Size != meta.Size {
@@ -120,7 +121,7 @@ func (s *AwsContentStore) Exists(meta *MetaObject) bool {
 		if strings.Contains(err.Error(), "404") {
 			return false
 		} else {
-			logger.Log(kv{"fn": "AwsContentStore.Exists", "err": ": " + err.Error()})
+			logger.Log(logger.Kv{"fn": "AwsContentStore.Exists", "err": ": " + err.Error()})
 			return false
 		}
 	}

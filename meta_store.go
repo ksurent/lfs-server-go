@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
 
 	"github.com/boltdb/bolt"
 )
@@ -105,7 +106,7 @@ func (s *MetaStore) doGet(rv *RequestVars) (*MetaObject, error) {
 	})
 
 	if err != nil {
-		logger.Log(kv{"fn": "MetaStore.doGet", "msg": err.Error()})
+		logger.Log(logger.Kv{"fn": "MetaStore.doGet", "msg": err.Error()})
 		return nil, err
 	}
 
@@ -182,7 +183,7 @@ func (s *MetaStore) Put(rv *RequestVars) (*MetaObject, error) {
 	if rv.Repo != "" {
 		err := s.createProject(rv)
 		if err != nil {
-			logger.Log(kv{"fn": "Put", "err": err.Error()})
+			logger.Log(logger.Kv{"fn": "Put", "err": err.Error()})
 			return nil, err
 		}
 	}
@@ -356,7 +357,7 @@ func (s *MetaStore) authenticate(authorization string) bool {
 	}
 	c, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(authorization, "Basic "))
 	if err != nil {
-		logger.Log(kv{"fn": "meta_store.authenticate", "msg": err.Error()})
+		logger.Log(logger.Kv{"fn": "meta_store.authenticate", "msg": err.Error()})
 		return false
 	}
 	cs := string(c)
@@ -381,7 +382,7 @@ func (s *MetaStore) authenticate(authorization string) bool {
 	})
 	match, err := checkPass([]byte(value), []byte(password))
 	if err != nil {
-		logger.Log(kv{"fn": "meta_store.authenticate", "msg": fmt.Sprintf("Decrypt error: %s", err.Error())})
+		logger.Log(logger.Kv{"fn": "meta_store.authenticate", "msg": fmt.Sprintf("Decrypt error: %s", err.Error())})
 	}
 	return match
 }

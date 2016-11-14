@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
 
 	"github.com/nmcclain/ldap"
 )
@@ -21,7 +22,7 @@ func NewLdapConnection() (*ldap.Conn, error) {
 	var err error
 	lh, err := ldapHost()
 	if err != nil {
-		logger.Log(kv{"fn": "NewLdapConnection", "error": err.Error()})
+		logger.Log(logger.Kv{"fn": "NewLdapConnection", "error": err.Error()})
 	}
 	hoster := strings.Split(lh.Host, ":")
 	port := func() uint16 {
@@ -43,7 +44,7 @@ func NewLdapConnection() (*ldap.Conn, error) {
 		ldapCon, err = ldap.Dial("tcp", fmt.Sprintf("%s:%d", hoster[0], port()))
 	}
 	if err != nil {
-		logger.Log(kv{"fn": "NewLdapConnection", "error": err.Error()})
+		logger.Log(logger.Kv{"fn": "NewLdapConnection", "error": err.Error()})
 		return nil, err
 	}
 	return ldapCon, nil
@@ -52,19 +53,19 @@ func NewLdapConnection() (*ldap.Conn, error) {
 func LdapSearch(search *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	ldapCon, err := NewLdapConnection()
 	if err != nil {
-		logger.Log(kv{"fn": "LdapSearch", "search error": err.Error()})
+		logger.Log(logger.Kv{"fn": "LdapSearch", "search error": err.Error()})
 		return nil, err
 	}
 	s, err := ldapCon.Search(search)
 	defer ldapCon.Close()
 	if err != nil {
-		logger.Log(kv{"fn": "meta_store_auth.LdapSearch", "error": err.Error()})
+		logger.Log(logger.Kv{"fn": "meta_store_auth.LdapSearch", "error": err.Error()})
 		return nil, err
 	}
 	if (len(config.Config.Ldap.BindDn) + len(config.Config.Ldap.BindPass)) > 0 {
 		err = ldapCon.Bind(config.Config.Ldap.BindDn, config.Config.Ldap.BindPass)
 		if err != nil {
-			logger.Log(kv{"fn": "LdapSearch", "Bind error": err.Error()})
+			logger.Log(logger.Kv{"fn": "LdapSearch", "Bind error": err.Error()})
 			return nil, err
 		}
 	}
@@ -78,7 +79,7 @@ func LdapSearch(search *ldap.SearchRequest) (*ldap.SearchResult, error) {
 func LdapBind(user string, password string) bool {
 	ldapCon, err := NewLdapConnection()
 	if err != nil {
-		logger.Log(kv{"fn": "LdapBind", "error": err.Error()})
+		logger.Log(logger.Kv{"fn": "LdapBind", "error": err.Error()})
 		return false
 	}
 	reqE := ldapCon.Bind(user, password)
@@ -95,7 +96,7 @@ func LdapBind(user string, password string) bool {
 func authenticateLdap(user, password string) bool {
 	dn, err := findUserDn(user)
 	if err != nil {
-		logger.Log(kv{"fn": "meta_store_auth", "error": err.Error()})
+		logger.Log(logger.Kv{"fn": "meta_store_auth", "error": err.Error()})
 		return false
 	}
 	return LdapBind(dn, password)
@@ -105,7 +106,7 @@ func findUserDn(user string) (string, error) {
 	//	fmt.Printf("Looking for user '%s'\n", user)
 	fltr := fmt.Sprintf("(&(objectclass=%s)(%s=%s))", config.Config.Ldap.UserObjectClass, config.Config.Ldap.UserCn, user)
 	//	m := fmt.Sprintf("LDAP Search \"ldapsearch -x -H '%s' -b '%s' '%s'\"\n", config.Config.Ldap.Server, config.Config.Ldap.Base, fltr)
-	//	logger.Log(kv{"fn": "meta_store_auth.findUserDn", "msg": m})
+	//	logger.Log(logger.Kv{"fn": "meta_store_auth.findUserDn", "msg": m})
 	search := &ldap.SearchRequest{
 		BaseDN:     config.Config.Ldap.Base,
 		Filter:     fltr,
@@ -114,7 +115,7 @@ func findUserDn(user string) (string, error) {
 	}
 	r, err := LdapSearch(search)
 	if err != nil {
-		logger.Log(kv{"fn": "meta_store_auth.findUserDn", "msg_error": err.Error()})
+		logger.Log(logger.Kv{"fn": "meta_store_auth.findUserDn", "msg_error": err.Error()})
 		return "", err
 	}
 	if len(r.Entries) > 0 {

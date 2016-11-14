@@ -1,4 +1,4 @@
-package main
+package logger
 
 import (
 	"fmt"
@@ -26,7 +26,7 @@ func init() {
 	}
 }
 
-type kv map[string]interface{}
+type Kv map[string]interface{}
 
 // KVLogger provides a logger that logs data in key/value pairs.
 type KVLogger struct {
@@ -40,7 +40,7 @@ func NewKVLogger(out io.Writer) *KVLogger {
 }
 
 // Log logs the key/value pairs to the logger's output.
-func (l *KVLogger) Log(data kv) {
+func (l *KVLogger) Log(data Kv) {
 	var file string
 	var line int
 	var ok bool
@@ -67,7 +67,7 @@ func (l *KVLogger) Log(data kv) {
 }
 
 // Fatal is equivalent to Log() follwed by a call to os.Exit(1)
-func (l *KVLogger) Fatal(data kv) {
+func (l *KVLogger) Fatal(data Kv) {
 	l.Log(data)
 	os.Exit(1)
 }

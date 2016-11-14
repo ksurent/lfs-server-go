@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
 )
 
 type MySQLMetaStore struct {
@@ -27,7 +28,7 @@ func (m *MySQLMetaStore) Close() {
 func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
 	rows, err := m.client.Query("select oid, size from oids where pending = 0")
 	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.findAllOids", "msg": err})
+		logger.Log(logger.Kv{"fn": "MySQLMetaStore.findAllOids", "msg": err})
 		return nil, err
 	}
 	defer rows.Close()
@@ -58,7 +59,7 @@ func (m *MySQLMetaStore) findAllOids() ([]*MetaObject, error) {
 func (m *MySQLMetaStore) mapOid(id int) ([]string, error) {
 	rows, err := m.client.Query("select oid from oid_maps where projectID = ? and pending = 0", id)
 	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.mapOid", "msg": err})
+		logger.Log(logger.Kv{"fn": "MySQLMetaStore.mapOid", "msg": err})
 		return nil, err
 	}
 	defer rows.Close()
@@ -130,7 +131,7 @@ func (m *MySQLMetaStore) createProject(name string) error {
 func (m *MySQLMetaStore) commitPendingObject(meta *MetaObject) error {
 	tx, err := m.client.Begin()
 	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.commitPendingObject", "msg": "Could not start a transaction: " + err.Error()})
+		logger.Log(logger.Kv{"fn": "MySQLMetaStore.commitPendingObject", "msg": "Could not start a transaction: " + err.Error()})
 		return err
 	}
 
@@ -147,7 +148,7 @@ func (m *MySQLMetaStore) commitPendingObject(meta *MetaObject) error {
 func (m *MySQLMetaStore) createPendingObject(meta *MetaObject) error {
 	tx, err := m.client.Begin()
 	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.createPendingObject", "msg": "Could not start a transaction: " + err.Error()})
+		logger.Log(logger.Kv{"fn": "MySQLMetaStore.createPendingObject", "msg": "Could not start a transaction: " + err.Error()})
 		return err
 	}
 
@@ -237,7 +238,7 @@ func (m *MySQLMetaStore) findOid(oid string, pending bool) (*MetaObject, error) 
 // meta store
 func (m *MySQLMetaStore) Put(v *RequestVars) (*MetaObject, error) {
 	if !m.authenticate(v.Authorization) {
-		logger.Log(kv{"fn": "MySQLMetaStore.Put", "msg": "Unauthorized"})
+		logger.Log(logger.Kv{"fn": "MySQLMetaStore.Put", "msg": "Unauthorized"})
 		return nil, newAuthError()
 	}
 
@@ -269,7 +270,7 @@ func (m *MySQLMetaStore) Put(v *RequestVars) (*MetaObject, error) {
 // RequestVars and commits them
 func (m *MySQLMetaStore) Commit(v *RequestVars) (*MetaObject, error) {
 	if !m.authenticate(v.Authorization) {
-		logger.Log(kv{"fn": "MySQLMetaStore.Commit", "msg": "Unauthorized"})
+		logger.Log(logger.Kv{"fn": "MySQLMetaStore.Commit", "msg": "Unauthorized"})
 		return nil, newAuthError()
 	}
 
@@ -394,7 +395,7 @@ func (m *MySQLMetaStore) authenticate(authorization string) bool {
 
 	c, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(authorization, "Basic "))
 	if err != nil {
-		logger.Log(kv{"fn": "MySQLMetaStore.authenticate", "msg": err.Error()})
+		logger.Log(logger.Kv{"fn": "MySQLMetaStore.authenticate", "msg": err.Error()})
 		return false
 	}
 	cs := string(c)
@@ -408,7 +409,7 @@ func (m *MySQLMetaStore) authenticate(authorization string) bool {
 		return authenticateLdap(user, password)
 	}
 
-	logger.Log(kv{"fn": "MySQLMetaStore.authenticate", "msg": "Authentication failed, please make sure LDAP is set to true"})
+	logger.Log(logger.Kv{"fn": "MySQLMetaStore.authenticate", "msg": "Authentication failed, please make sure LDAP is set to true"})
 	return false
 
 }

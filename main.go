@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
 
 	"github.com/peterbourgon/g2g"
 )
@@ -23,7 +24,6 @@ const (
 )
 
 var (
-	logger       = NewKVLogger(os.Stdout)
 	BuildVersion = "0.1.0"
 )
 
@@ -100,7 +100,7 @@ func FindMetaStore() (GenericMetaStore, error) {
 }
 
 func findContentStore() (GenericContentStore, error) {
-	logger.Log(kv{"fn": "findContentStore", "msg": fmt.Sprintf("Using ContentStore %s", config.Config.ContentStore)})
+	logger.Log(logger.Kv{"fn": "findContentStore", "msg": fmt.Sprintf("Using ContentStore %s", config.Config.ContentStore)})
 	switch config.Config.ContentStore {
 	case "filestore":
 		return NewContentStore(config.Config.ContentPath)
@@ -121,31 +121,31 @@ func main() {
 
 	tl, err := NewTrackingListener(config.Config.Listen)
 	if err != nil {
-		logger.Fatal(kv{"fn": "main", "err": "Could not create listener: " + err.Error()})
+		logger.Fatal(logger.Kv{"fn": "main", "err": "Could not create listener: " + err.Error()})
 	}
 
 	listener = tl
 
 	if config.Config.IsHTTPS() {
 		if config.Config.UseTLS() {
-			logger.Log(kv{"fn": "main", "msg": "Using tls"})
+			logger.Log(logger.Kv{"fn": "main", "msg": "Using tls"})
 			listener, err = wrapHttps(tl, config.Config.Cert, config.Config.Key)
 			if err != nil {
-				logger.Fatal(kv{"fn": "main", "err": "Could not create https listener: " + err.Error()})
+				logger.Fatal(logger.Kv{"fn": "main", "err": "Could not create https listener: " + err.Error()})
 			}
 		} else {
-			logger.Log(kv{"fn": "main", "msg": "Will generate https hrefs"})
+			logger.Log(logger.Kv{"fn": "main", "msg": "Will generate https hrefs"})
 		}
 	}
 
 	metaStore, err := FindMetaStore()
 	if err != nil {
-		logger.Fatal(kv{"fn": "main", "err": "Could not open the meta store: " + err.Error()})
+		logger.Fatal(logger.Kv{"fn": "main", "err": "Could not open the meta store: " + err.Error()})
 	}
 
 	contentStore, err := findContentStore()
 	if err != nil {
-		logger.Fatal(kv{"fn": "main", "err": "Could not open the content store: " + err.Error()})
+		logger.Fatal(logger.Kv{"fn": "main", "err": "Could not open the content store: " + err.Error()})
 	}
 
 	c := make(chan os.Signal, 1)
@@ -172,7 +172,7 @@ func main() {
 		if config.Config.Graphite.AppendHostname {
 			host, err := os.Hostname()
 			if err != nil {
-				logger.Log(kv{"fn": "main", "msg": "Could not detect hostname: " + err.Error()})
+				logger.Log(logger.Kv{"fn": "main", "msg": "Could not detect hostname: " + err.Error()})
 				host = "localhost"
 			}
 			host = strings.Replace(host, ".", "_", -1)
@@ -186,10 +186,10 @@ func main() {
 
 		setupGraphiteMetrics(prefix, graphite)
 
-		logger.Log(kv{"fn": "main", "msg": "Sending metrics", "prefix": prefix, "endpoint": config.Config.Graphite.Endpoint})
+		logger.Log(logger.Kv{"fn": "main", "msg": "Sending metrics", "prefix": prefix, "endpoint": config.Config.Graphite.Endpoint})
 	}
 
-	logger.Log(kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": config.Config.Listen, "version": BuildVersion})
+	logger.Log(logger.Kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": config.Config.Listen, "version": BuildVersion})
 
 	expvarVersion.Set(BuildVersion)
 

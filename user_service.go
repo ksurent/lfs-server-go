@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/ksurent/lfs-server-go/logger"
 )
 
 // declare the type of UserAccessGetter
@@ -53,7 +55,7 @@ func NewUserService(base string, username string, project string, action string)
 	// TODO: Find a way to stub this without the ghetto "Filled" hack
 	us.UserAccessResponse = &UserAccessResponse{Filled: false}
 	if us.vetAction() != true {
-		logger.Log(kv{"fn": "NewUserService", "action": fmt.Sprintf("%s is not in AllowedActions", action)})
+		logger.Log(logger.Kv{"fn": "NewUserService", "action": fmt.Sprintf("%s is not in AllowedActions", action)})
 		us.UserAccessResponse.Message = fmt.Sprintf("%s is not in AllowedActions", us.Action)
 	}
 	return us

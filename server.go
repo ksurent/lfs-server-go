@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
 
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
@@ -165,7 +166,7 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(kv{"fn": "GetContentHandler", "error": err})
+		logger.Log(logger.Kv{"fn": "GetContentHandler", "error": err})
 
 		if isAuthError(err) {
 			return requireAuth(w, r)
@@ -175,7 +176,7 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 
 	reader, err := a.contentStore.Get(meta)
 	if err != nil {
-		logger.Log(kv{"fn": "GetContentHandler", "error": err})
+		logger.Log(logger.Kv{"fn": "GetContentHandler", "error": err})
 
 		return notFound(w, r)
 	}
@@ -191,7 +192,7 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	_, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(kv{"fn": "GetSearchHandler", "error": err})
+		logger.Log(logger.Kv{"fn": "GetSearchHandler", "error": err})
 
 		if isAuthError(err) {
 			return requireAuth(w, r)
@@ -207,7 +208,7 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(kv{"fn": "GetMetaHandler", "error": err})
+		logger.Log(logger.Kv{"fn": "GetMetaHandler", "error": err})
 
 		if isAuthError(err) {
 			return requireAuth(w, r)
@@ -230,7 +231,7 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Put(rv)
 	if err != nil {
-		logger.Log(kv{"fn": "PostHandler", "error": err})
+		logger.Log(logger.Kv{"fn": "PostHandler", "error": err})
 
 		if isAuthError(err) {
 			return requireAuth(w, r)
@@ -267,7 +268,7 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 		// returns it if it does
 		meta, err := a.metaStore.Put(object)
 		if err != nil {
-			logger.Log(kv{"fn": "BatchHandler", "object": object, "error": err})
+			logger.Log(logger.Kv{"fn": "BatchHandler", "object": object, "error": err})
 
 			if isAuthError(err) {
 				return requireAuth(w, r)
@@ -305,7 +306,7 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.GetPending(rv)
 	if err != nil {
-		logger.Log(kv{"fn": "PutHandler", "error": err})
+		logger.Log(logger.Kv{"fn": "PutHandler", "error": err})
 
 		if isAuthError(err) {
 			return requireAuth(w, r)
@@ -314,14 +315,14 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	}
 
 	if err := a.contentStore.Put(meta, r.Body); err != nil {
-		logger.Log(kv{"fn": "PutHandler", "meta": meta, "error": err})
+		logger.Log(logger.Kv{"fn": "PutHandler", "meta": meta, "error": err})
 
 		return http.StatusInternalServerError
 	}
 
 	_, err = a.metaStore.Commit(rv)
 	if err != nil {
-		logger.Log(kv{"fn": "PutHandler", "meta": meta, "error": err})
+		logger.Log(logger.Kv{"fn": "PutHandler", "meta": meta, "error": err})
 
 		return http.StatusInternalServerError
 	}
@@ -335,7 +336,7 @@ func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	meta, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(kv{"fn": "VerifyHandler", "error": err})
+		logger.Log(logger.Kv{"fn": "VerifyHandler", "error": err})
 
 		if isAuthError(err) {
 			return requireAuth(w, r)
@@ -460,7 +461,7 @@ func unpackbatch(r *http.Request) *BatchVars {
 }
 
 func logRequest(r *http.Request, status int) {
-	logger.Log(kv{
+	logger.Log(logger.Kv{
 		"method":     r.Method,
 		"url":        r.URL,
 		"status":     status,

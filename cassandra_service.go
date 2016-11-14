@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
 
 	"github.com/gocql/gocql"
 )
@@ -25,8 +26,8 @@ func NewCassandraSession() *CassandraService {
 	session, err = cluster.CreateSession()
 	perror(initializeCassandra(session))
 	perror(err)
-	logger.Log(kv{"fn": "cassandra_service", "msg": fmt.Sprintf("Connecting to host '%s'\n", config.Config.Cassandra.Hosts)})
-	logger.Log(kv{"fn": "cassandra_service", "msg": fmt.Sprintf("Cassandra.namespace '%s_%s'\n", config.Config.Cassandra.Keyspace, config.GoEnv)})
+	logger.Log(logger.Kv{"fn": "cassandra_service", "msg": fmt.Sprintf("Connecting to host '%s'\n", config.Config.Cassandra.Hosts)})
+	logger.Log(logger.Kv{"fn": "cassandra_service", "msg": fmt.Sprintf("Cassandra.namespace '%s_%s'\n", config.Config.Cassandra.Keyspace, config.GoEnv)})
 	return &CassandraService{Client: session}
 }
 
