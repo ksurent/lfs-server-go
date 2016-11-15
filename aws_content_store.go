@@ -11,6 +11,7 @@ import (
 
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/logger"
+	m "github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
@@ -67,18 +68,18 @@ func (s *AwsContentStore) makeBucket() error {
 	return nil
 }
 
-func (s *AwsContentStore) Get(meta *MetaObject) (io.ReadCloser, error) {
+func (s *AwsContentStore) Get(meta *m.Object) (io.ReadCloser, error) {
 	path := transformKey(meta.Oid)
 	return s.bucket.GetReader(path)
 }
 
-func (s *AwsContentStore) getMetaData(meta *MetaObject) (*s3.Key, error) {
+func (s *AwsContentStore) getMetaData(meta *m.Object) (*s3.Key, error) {
 	path := transformKey(meta.Oid)
 	return s.bucket.GetKey(path)
 }
 
 // TODO: maybe take write errors into account and buffer/resend to amazon?
-func (s *AwsContentStore) Put(meta *MetaObject, r io.Reader) error {
+func (s *AwsContentStore) Put(meta *m.Object, r io.Reader) error {
 	path := transformKey(meta.Oid)
 	/*
 		There is probably a better way to compute this but we need to write the file to memory to
@@ -113,7 +114,7 @@ func (s *AwsContentStore) Put(meta *MetaObject, r io.Reader) error {
 	return retStat
 }
 
-func (s *AwsContentStore) Exists(meta *MetaObject) bool {
+func (s *AwsContentStore) Exists(meta *m.Object) bool {
 	path := transformKey(meta.Oid)
 	// returns a 404 error if its not there
 	_, err := s.bucket.GetKey(path)
@@ -129,7 +130,7 @@ func (s *AwsContentStore) Exists(meta *MetaObject) bool {
 	return true
 }
 
-func (s *AwsContentStore) Verify(meta *MetaObject) error {
+func (s *AwsContentStore) Verify(meta *m.Object) error {
 	return errNotImplemented
 }
 

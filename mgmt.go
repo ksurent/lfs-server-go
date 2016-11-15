@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ksurent/lfs-server-go/config"
+	m "github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/GeertJohan/go.rice"
 	"github.com/gorilla/mux"
@@ -24,9 +25,9 @@ type pageData struct {
 	Name       string
 	Config     *config.Configuration
 	ConfigDump map[string]interface{}
-	Users      []*MetaUser
-	Objects    []*MetaObject
-	Projects   []*MetaProject
+	Users      []*m.User
+	Objects    []*m.Object
+	Projects   []*m.Project
 }
 
 func (a *App) addMgmt(r *mux.Router) {
@@ -119,7 +120,7 @@ func (a *App) searchOidHandler(w http.ResponseWriter, r *http.Request) {
 	if len(searchedOid) < 1 {
 		writeStatus(w, r, 404)
 	}
-	cs, err := FindMetaStore()
+	cs, err := findMetaStore()
 	if err != nil {
 		writeStatus(w, r, 404)
 	}

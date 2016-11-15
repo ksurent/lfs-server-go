@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/ksurent/lfs-server-go/config"
+	m "github.com/ksurent/lfs-server-go/meta"
 )
 
 var (
@@ -14,7 +17,7 @@ func TestGetWithAuth(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	meta, err := metaStoreTest.Get(&RequestVars{Authorization: testAuth, Oid: contentOid})
+	meta, err := metaStoreTest.Get(&m.RequestVars{Authorization: testAuth, Oid: contentOid})
 	if err != nil {
 		t.Fatalf("Error retreiving meta: %s", err)
 	}
@@ -32,7 +35,7 @@ func TestGetWithoutAuth(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	_, err := metaStoreTest.Get(&RequestVars{Authorization: badAuth, Oid: contentOid})
+	_, err := metaStoreTest.Get(&m.RequestVars{Authorization: badAuth, Oid: contentOid})
 	if !isAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
@@ -42,9 +45,9 @@ func TestPutWithAuth(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	getRv := &RequestVars{Authorization: testAuth, Oid: nonexistingOid}
+	getRv := &m.RequestVars{Authorization: testAuth, Oid: nonexistingOid}
 
-	putRv := &RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42}
+	putRv := &m.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42}
 
 	meta, err := metaStoreTest.Put(putRv)
 	if err != nil {
@@ -123,7 +126,7 @@ func setupMeta() {
 		os.Exit(1)
 	}
 
-	rv := &RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize}
+	rv := &m.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize}
 
 	if _, err := metaStoreTest.Put(rv); err != nil {
 		teardownMeta()

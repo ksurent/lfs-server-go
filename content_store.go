@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	m "github.com/ksurent/lfs-server-go/meta"
 )
 
 // ContentStore provides a simple file system based storage.
@@ -25,14 +27,14 @@ func NewContentStore(base string) (*ContentStore, error) {
 
 // Get takes a Meta object and retreives the content from the store, returning
 // it as an io.Reader.
-func (s *ContentStore) Get(meta *MetaObject) (io.ReadCloser, error) {
+func (s *ContentStore) Get(meta *m.Object) (io.ReadCloser, error) {
 	path := filepath.Join(s.basePath, transformKey(meta.Oid))
 
 	return os.Open(path)
 }
 
 // Put takes a Meta object and an io.Reader and writes the content to the store.
-func (s *ContentStore) Put(meta *MetaObject, r io.Reader) error {
+func (s *ContentStore) Put(meta *m.Object, r io.Reader) error {
 	path := filepath.Join(s.basePath, transformKey(meta.Oid))
 	tmpPath := path + ".tmp"
 
@@ -73,7 +75,7 @@ func (s *ContentStore) Put(meta *MetaObject, r io.Reader) error {
 }
 
 // Exists returns true if the object exists in the content store.
-func (s *ContentStore) Exists(meta *MetaObject) bool {
+func (s *ContentStore) Exists(meta *m.Object) bool {
 	path := filepath.Join(s.basePath, transformKey(meta.Oid))
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return false
@@ -81,7 +83,7 @@ func (s *ContentStore) Exists(meta *MetaObject) bool {
 	return true
 }
 
-func (s *ContentStore) Verify(meta *MetaObject) error {
+func (s *ContentStore) Verify(meta *m.Object) error {
 	path := filepath.Join(s.basePath, transformKey(meta.Oid))
 
 	stat, err := os.Stat(path)

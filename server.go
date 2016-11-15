@@ -11,42 +11,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/logger"
+	m "github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
 )
-
-// RequestVars contain variables from the HTTP request. Variables from routing, json body decoding, and
-// some headers are stored.
-type RequestVars struct {
-	Oid           string
-	Size          int64
-	User          string
-	Password      string
-	Namespace     string
-	Repo          string
-	Authorization string
-}
-
-type BatchVars struct {
-	Objects []*RequestVars `json:"objects"`
-}
-
-// MetaObject is object metadata as seen by the object and metadata stores.
-type MetaObject struct {
-	Oid          string   `json:"oid" cql:"oid"`
-	Size         int64    `json:"size "cql:"size"`
-	ProjectNames []string `json:"project_names"`
-	Existing     bool
-}
-
-// MetaProject is project metadata
-type MetaProject struct {
-	Name string   `json:"name" cql:"name"`
-	Oids []string `json:"oids" cql:"oids"`
-}
 
 // Representation is object metadata as seen by clients of the lfs server.
 type Representation struct {
@@ -55,54 +25,11 @@ type Representation struct {
 	Links map[string]*link `json:"_links"`
 }
 
-// MetaUser encapsulates information about a meta store user
-type MetaUser struct {
-	Name     string `cql:"username"`
-	Password string ` cql:"password"`
-}
-
-// Wrapper for MetaStore so we can use different types
-type GenericMetaStore interface {
-	Put(v *RequestVars) (*MetaObject, error)
-	Get(v *RequestVars) (*MetaObject, error)
-	GetPending(v *RequestVars) (*MetaObject, error)
-	Commit(v *RequestVars) (*MetaObject, error)
-	Close()
-	DeleteUser(user string) error
-	AddUser(user, pass string) error
-	AddProject(projectName string) error
-	Users() ([]*MetaUser, error)
-	Objects() ([]*MetaObject, error)
-	Projects() ([]*MetaProject, error)
-}
-
 type GenericContentStore interface {
-	Get(meta *MetaObject) (io.ReadCloser, error)
-	Put(meta *MetaObject, r io.Reader) error
-	Exists(meta *MetaObject) bool
-	Verify(meta *MetaObject) error
-}
-
-// ObjectLink builds a URL linking to the object.
-func (v *RequestVars) ObjectLink() string {
-	path := fmt.Sprintf("/%s/%s/objects/%s", v.Namespace, v.Repo, v.Oid)
-
-	if config.Config.IsHTTPS() {
-		return fmt.Sprintf("%s://%s%s", config.Config.Scheme, config.Config.Host, path)
-	}
-
-	return fmt.Sprintf("http://%s%s", config.Config.Host, path)
-}
-
-// VerifyLink builds a URL used to verify uploaded files.
-func (v *RequestVars) VerifyLink() string {
-	path := fmt.Sprintf("/%s/%s/verify", v.Namespace, v.Repo)
-
-	if config.Config.IsHTTPS() {
-		return fmt.Sprintf("%s://%s%s", config.Config.Scheme, config.Config.Host, path)
-	}
-
-	return fmt.Sprintf("http://%s%s", config.Config.Host, path)
+	Get(meta *m.Object) (io.ReadCloser, error)
+	Put(meta *m.Object, r io.Reader) error
+	Exists(meta *m.Object) bool
+	Verify(meta *m.Object) error
 }
 
 // link provides a structure used to build a hypermedia representation of an HTTP link.
@@ -115,11 +42,11 @@ type link struct {
 type App struct {
 	router       *mux.Router
 	contentStore GenericContentStore
-	metaStore    GenericMetaStore
+	metaStore    m.GenericMetaStore
 }
 
 // NewApp creates a new App using the ContentStore and MetaStore provided
-func NewApp(content GenericContentStore, meta GenericMetaStore) *App {
+func NewApp(content GenericContentStore, meta m.GenericMetaStore) *App {
 	app := &App{contentStore: content, metaStore: meta}
 
 	r := mux.NewRouter()
@@ -369,9 +296,9 @@ func (a *App) DebugHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "\n}\n")
 }
 
-// Represent takes a RequestVars and Meta and turns it into a Representation suitable
+// Represent takes a m.RequestVars and Meta and turns it into a Representation suitable
 // for json encoding
-func (a *App) Represent(rv *RequestVars, meta *MetaObject, download, upload, verify bool) *Representation {
+func (a *App) Represent(rv *m.RequestVars, meta *m.Object, download, upload, verify bool) *Representation {
 	rep := &Representation{
 		Oid:   meta.Oid,
 		Size:  meta.Size,
@@ -415,9 +342,9 @@ func MetaMatcher(r *http.Request, m *mux.RouteMatch) bool {
 	return mt == metaMediaType
 }
 
-func unpack(r *http.Request) *RequestVars {
+func unpack(r *http.Request) *m.RequestVars {
 	vars := mux.Vars(r)
-	rv := &RequestVars{
+	rv := &m.RequestVars{
 		Namespace:     vars["namespace"],
 		Repo:          vars["repo"],
 		Oid:           vars["oid"],
@@ -425,7 +352,7 @@ func unpack(r *http.Request) *RequestVars {
 	}
 
 	if r.Method == "POST" { // Maybe also check if +json
-		var p RequestVars
+		var p m.RequestVars
 		dec := json.NewDecoder(r.Body)
 		err := dec.Decode(&p)
 		if err != nil {
@@ -440,10 +367,10 @@ func unpack(r *http.Request) *RequestVars {
 }
 
 // TODO cheap hack, unify with unpack
-func unpackbatch(r *http.Request) *BatchVars {
+func unpackbatch(r *http.Request) *m.BatchVars {
 	vars := mux.Vars(r)
 
-	var bv BatchVars
+	var bv m.BatchVars
 
 	dec := json.NewDecoder(r.Body)
 	err := dec.Decode(&bv)

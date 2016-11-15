@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/ksurent/lfs-server-go/config"
+	m "github.com/ksurent/lfs-server-go/meta"
 )
 
 var (
@@ -43,13 +46,13 @@ func TestMySQLPutWithAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	rvPut := &RequestVars{
+	rvPut := &m.RequestVars{
 		Authorization: testAuth,
 		Oid:           nonexistingOid,
 		Size:          42,
 		Repo:          testRepo,
 	}
-	rvGet := &RequestVars{
+	rvGet := &m.RequestVars{
 		Authorization: testAuth,
 		Oid:           nonexistingOid,
 	}
@@ -115,7 +118,7 @@ func TestMySQLPutWithoutAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	_, err := metaStoreTestMySQL.Put(&RequestVars{
+	_, err := metaStoreTestMySQL.Put(&m.RequestVars{
 		Authorization: badAuth,
 		User:          testUser,
 		Oid:           contentOid,
@@ -126,7 +129,7 @@ func TestMySQLPutWithoutAuth(t *testing.T) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
-	_, err = metaStoreTestMySQL.Put(&RequestVars{
+	_, err = metaStoreTestMySQL.Put(&m.RequestVars{
 		User: testUser,
 		Oid:  contentOid,
 		Size: 42,
@@ -143,12 +146,12 @@ func TestMySQLGetWithAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	meta, err := metaStoreTestMySQL.Get(&RequestVars{Authorization: testAuth, Oid: noAuthOid})
+	meta, err := metaStoreTestMySQL.Get(&m.RequestVars{Authorization: testAuth, Oid: noAuthOid})
 	if err == nil {
 		t.Fatalf("expected get to fail with unknown oid, got: %s", meta.Oid)
 	}
 
-	meta, err = metaStoreTestMySQL.Get(&RequestVars{Authorization: testAuth, Oid: contentOid})
+	meta, err = metaStoreTestMySQL.Get(&m.RequestVars{Authorization: testAuth, Oid: contentOid})
 	if err != nil {
 		t.Fatalf("expected get to succeed, got: %s", err)
 	}
@@ -208,7 +211,7 @@ func setupMySQLMeta() error {
 	mysqlStore.client.Exec("TRUNCATE TABLE oids")
 	mysqlStore.client.Exec("TRUNCATE TABLE projects")
 
-	rv := &RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize, Repo: testRepo}
+	rv := &m.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize, Repo: testRepo}
 
 	if _, err := metaStoreTestMySQL.Put(rv); err != nil {
 		fmt.Printf("error seeding mysql test meta store: %s\n", err)

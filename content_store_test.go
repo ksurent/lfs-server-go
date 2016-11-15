@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	m "github.com/ksurent/lfs-server-go/meta"
 )
 
 var contentStore *ContentStore
@@ -14,7 +16,7 @@ func TestContentStorePut(t *testing.T) {
 	setup()
 	defer teardown()
 
-	m := &MetaObject{
+	m := &m.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -35,7 +37,7 @@ func TestContentStorePutHashMismatch(t *testing.T) {
 	setup()
 	defer teardown()
 
-	m := &MetaObject{
+	m := &m.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -56,7 +58,7 @@ func TestContentStorePutSizeMismatch(t *testing.T) {
 	setup()
 	defer teardown()
 
-	m := &MetaObject{
+	m := &m.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 14,
 	}
@@ -77,7 +79,7 @@ func TestContentStoreGet(t *testing.T) {
 	setup()
 	defer teardown()
 
-	m := &MetaObject{
+	m := &m.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -103,7 +105,7 @@ func TestContentStoreGetNonExisting(t *testing.T) {
 	setup()
 	defer teardown()
 
-	_, err := contentStore.Get(&MetaObject{Oid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	_, err := contentStore.Get(&m.Object{Oid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
 	if err == nil {
 		t.Fatalf("expected to get an error, but content existed")
 	}
@@ -113,7 +115,7 @@ func TestContentStoreExists(t *testing.T) {
 	setup()
 	defer teardown()
 
-	m := &MetaObject{
+	m := &m.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}

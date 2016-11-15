@@ -10,6 +10,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/logger"
+	m "github.com/ksurent/lfs-server-go/meta"
 )
 
 func TestGetAuthed(t *testing.T) {
@@ -244,7 +248,7 @@ func TestPut(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", res.StatusCode)
 	}
 
-	r, err := testContentStore.Get(&MetaObject{Oid: contentOid})
+	r, err := testContentStore.Get(&m.Object{Oid: contentOid})
 	if err != nil {
 		t.Fatalf("error retreiving from content store: %s", err)
 	}
@@ -296,7 +300,7 @@ func TestMediaTypesParsed(t *testing.T) {
 
 var (
 	lfsServer         *httptest.Server
-	testMetaStore     GenericMetaStore
+	testMetaStore     m.GenericMetaStore
 	testContentStore  GenericContentStore
 	testUser          = "admin"
 	testPass          = "admin"
@@ -364,7 +368,7 @@ func seedMetaStore() error {
 		return err
 	}
 
-	rv := &RequestVars{
+	rv := &m.RequestVars{
 		Authorization: testAuth,
 		Oid:           contentOid,
 		Size:          contentSize,
@@ -382,7 +386,7 @@ func seedMetaStore() error {
 }
 
 func seedContentStore() error {
-	meta := &MetaObject{Oid: contentOid, Size: contentSize}
+	meta := &m.Object{Oid: contentOid, Size: contentSize}
 	buf := bytes.NewBuffer([]byte(content))
 	if err := testContentStore.Put(meta, buf); err != nil {
 		return err

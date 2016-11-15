@@ -6,6 +6,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+
+	"github.com/ksurent/lfs-server-go/config"
+	m "github.com/ksurent/lfs-server-go/meta"
 )
 
 type values map[string]string
@@ -42,7 +45,7 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	if res.StatusCode != 200 {
 		t.Fatalf("response code failed. Expected 200, got %d", res.StatusCode)
 	}
-	var metas []*MetaObject
+	var metas []*m.Object
 	data, _ := ioutil.ReadAll(res.Body)
 	// validate the request header
 	testRequestHeader(t, req, "Accept", "application/json")
@@ -50,7 +53,7 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	testResponseHeader(t, res, "Content-Type", "application/json")
 	json.Unmarshal(data, &metas)
 	var good bool
-	var meta *MetaObject
+	var meta *m.Object
 	good = false
 	for _, m := range metas {
 		if m.Oid == contentOid {
@@ -63,7 +66,7 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	}
 }
 func TestMgmtGetProjects_Json(t *testing.T) {
-	_, err := testMetaStore.Put(&RequestVars{Repo: testRepo, User: testUser, Oid: contentOid, Authorization: testAuth})
+	_, err := testMetaStore.Put(&m.RequestVars{Repo: testRepo, User: testUser, Oid: contentOid, Authorization: testAuth})
 	if err != nil {
 		fmt.Println("got an err", err.Error())
 	}
@@ -73,13 +76,13 @@ func TestMgmtGetProjects_Json(t *testing.T) {
 	}
 	header := map[string][]string{"Accept": {"application/json"}, "Accept-Encoding": {"gzip", "text"}}
 	req.Header = header
-	req.SetBasicAuth(Config.AdminUser, Config.AdminPass)
+	req.SetBasicAuth(config.Config.AdminUser, config.Config.AdminPass)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("response error: %s", err)
 	}
-	var metas []*MetaProject
-	var meta *MetaProject
+	var metas []*m.Project
+	var meta *m.Project
 	data, _ := ioutil.ReadAll(res.Body)
 	json.Unmarshal(data, &metas)
 	var good bool
@@ -107,13 +110,13 @@ func TestMgmtGetUsers_Json(t *testing.T) {
 	}
 	header := map[string][]string{"Accept": {"application/json"}, "Accept-Encoding": {"gzip", "text"}}
 	req.Header = header
-	req.SetBasicAuth(Config.AdminUser, Config.AdminPass)
+	req.SetBasicAuth(config.Config.AdminUser, config.Config.AdminPass)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("response error: %s", err)
 	}
-	var meta *MetaUser
-	var metas []*MetaUser
+	var meta *m.User
+	var metas []*m.User
 	data, _ := ioutil.ReadAll(res.Body)
 	json.Unmarshal(data, &metas)
 	var good bool

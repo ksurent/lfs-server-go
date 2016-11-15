@@ -14,6 +14,7 @@ import (
 
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/logger"
+	m "github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/peterbourgon/g2g"
 )
@@ -79,7 +80,7 @@ func wrapHttps(l net.Listener, cert, key string) (net.Listener, error) {
 	return tlsListener, nil
 }
 
-func FindMetaStore() (GenericMetaStore, error) {
+func findMetaStore() (m.GenericMetaStore, error) {
 	switch config.Config.BackingStore {
 	case "bolt":
 		m, err := NewMetaStore(config.Config.MetaDB)
@@ -139,7 +140,7 @@ func main() {
 		}
 	}
 
-	metaStore, err := FindMetaStore()
+	metaStore, err := findMetaStore()
 	if err != nil {
 		logger.Fatal("Could not open the meta store: " + err.Error())
 	}
