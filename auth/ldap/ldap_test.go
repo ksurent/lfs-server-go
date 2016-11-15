@@ -1,4 +1,4 @@
-package main
+package ldap
 
 import (
 	"fmt"
@@ -9,10 +9,13 @@ import (
 
 	"github.com/ksurent/lfs-server-go/config"
 
-	"github.com/nmcclain/ldap"
+	l "github.com/nmcclain/ldap"
 )
 
-var ()
+var (
+	testUser = "admin"
+	testPass = "admin"
+)
 
 func TestNewLdapConnection(t *testing.T) {
 	setupMetaAuth()
@@ -57,7 +60,7 @@ func TestLdapSearch(t *testing.T) {
 	defer tearDownMetaAuth()
 	fltr := fmt.Sprintf("(&(objectClass=%s)(%s=%s))", config.Config.Ldap.UserObjectClass, config.Config.Ldap.UserCn, testUser)
 	base := fmt.Sprintf("%s=%s,%s", config.Config.Ldap.UserCn, testUser, config.Config.Ldap.Base)
-	search := &ldap.SearchRequest{
+	search := &l.SearchRequest{
 		BaseDN: base,
 		Filter: fltr,
 	}

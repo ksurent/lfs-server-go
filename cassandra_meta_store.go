@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ksurent/lfs-server-go/auth/ldap"
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
@@ -188,7 +189,7 @@ func (self *CassandraMetaStore) findAllProjects() ([]*m.Project, error) {
 // meta store
 func (self *CassandraMetaStore) Put(v *m.RequestVars) (*m.Object, error) {
 	if !self.authenticate(v.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	// Don't care here if it's pending or committed
@@ -215,7 +216,7 @@ func (self *CassandraMetaStore) Put(v *m.RequestVars) (*m.Object, error) {
 // m.RequestVars and commits them
 func (self *CassandraMetaStore) Commit(v *m.RequestVars) (*m.Object, error) {
 	if !self.authenticate(v.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := self.GetPending(v)
@@ -276,7 +277,7 @@ func (self *CassandraMetaStore) doPut(meta *m.Object) error {
 // m.RequestVars
 func (self *CassandraMetaStore) Get(v *m.RequestVars) (*m.Object, error) {
 	if !self.authenticate(v.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := self.doGet(v)
@@ -292,7 +293,7 @@ func (self *CassandraMetaStore) Get(v *m.RequestVars) (*m.Object, error) {
 // Same as Get() but for uncommitted objects
 func (self *CassandraMetaStore) GetPending(v *m.RequestVars) (*m.Object, error) {
 	if !self.authenticate(v.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := self.doGet(v)
@@ -435,7 +436,7 @@ func (self *CassandraMetaStore) authenticate(authorization string) bool {
 	user, password := cs[:i], cs[i+1:]
 
 	if config.Config.Ldap.Enabled {
-		return authenticateLdap(user, password)
+		return ldap.AuthenticateLdap(user, password)
 	}
 	mu, err := self.findUser(user)
 	if err != nil {

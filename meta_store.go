@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ksurent/lfs-server-go/auth/ldap"
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
@@ -61,7 +62,7 @@ func NewMetaStore(dbFile string) (*MetaStore, error) {
 // m.m.RequestVars
 func (s *MetaStore) Get(rv *m.RequestVars) (*m.Object, error) {
 	if !s.authenticate(rv.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := s.doGet(rv)
@@ -77,7 +78,7 @@ func (s *MetaStore) Get(rv *m.RequestVars) (*m.Object, error) {
 // Same as Get() but for uncommitted objects
 func (s *MetaStore) GetPending(rv *m.RequestVars) (*m.Object, error) {
 	if !s.authenticate(rv.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := s.doGet(rv)
@@ -171,7 +172,7 @@ func (s *MetaStore) createProject(rv *m.RequestVars) error {
 // meta store
 func (s *MetaStore) Put(rv *m.RequestVars) (*m.Object, error) {
 	if !s.authenticate(rv.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	// Don't care here if it's pending or committed
@@ -205,7 +206,7 @@ func (s *MetaStore) Put(rv *m.RequestVars) (*m.Object, error) {
 // m.m.RequestVars and commits them
 func (s *MetaStore) Commit(rv *m.RequestVars) (*m.Object, error) {
 	if !s.authenticate(rv.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := s.GetPending(rv)
@@ -365,7 +366,7 @@ func (s *MetaStore) authenticate(authorization string) bool {
 	}
 	user, password := cs[:i], cs[i+1:]
 	if config.Config.Ldap.Enabled {
-		return authenticateLdap(user, password)
+		return ldap.AuthenticateLdap(user, password)
 	}
 	value := ""
 

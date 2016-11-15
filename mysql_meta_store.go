@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"strings"
 
+	"github.com/ksurent/lfs-server-go/auth/ldap"
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
@@ -236,7 +237,7 @@ func (s *MySQLMetaStore) findOid(oid string, pending bool) (*m.Object, error) {
 // meta store
 func (s *MySQLMetaStore) Put(v *m.RequestVars) (*m.Object, error) {
 	if !s.authenticate(v.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	// Don't care here if it's pending or committed
@@ -267,7 +268,7 @@ func (s *MySQLMetaStore) Put(v *m.RequestVars) (*m.Object, error) {
 // m.RequestVars and commits them
 func (s *MySQLMetaStore) Commit(v *m.RequestVars) (*m.Object, error) {
 	if !s.authenticate(v.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := s.GetPending(v)
@@ -299,7 +300,7 @@ func (s *MySQLMetaStore) doPut(meta *m.Object) error {
 
 func (s *MySQLMetaStore) Get(v *m.RequestVars) (*m.Object, error) {
 	if !s.authenticate(v.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := s.findOid(v.Oid, false)
@@ -314,7 +315,7 @@ func (s *MySQLMetaStore) Get(v *m.RequestVars) (*m.Object, error) {
 // m.RequestVars
 func (s *MySQLMetaStore) GetPending(v *m.RequestVars) (*m.Object, error) {
 	if !s.authenticate(v.Authorization) {
-		return nil, newAuthError()
+		return nil, m.ErrNotAuthenticated
 	}
 
 	meta, err := s.findOid(v.Oid, true)
@@ -330,7 +331,7 @@ AddUser (Add a new user)
 Not implemented in mysql_meta_store
 */
 func (s *MySQLMetaStore) AddUser(user, pass string) error {
-	return errNotImplemented
+	return ldap.ErrUseLdap
 }
 
 /*
@@ -345,7 +346,7 @@ DeleteUser (Delete a user)
 Not implemented
 */
 func (s *MySQLMetaStore) DeleteUser(user string) error {
-	return errNotImplemented
+	return ldap.ErrUseLdap
 }
 
 /*
@@ -353,7 +354,7 @@ Users (get list of users)
 Not implemented
 */
 func (s *MySQLMetaStore) Users() ([]*m.User, error) {
-	return []*m.User{}, errNotImplemented
+	return []*m.User{}, ldap.ErrUseLdap
 }
 
 /*
@@ -391,6 +392,11 @@ func (s *MySQLMetaStore) authenticate(authorization string) bool {
 		return false
 	}
 
+	if config.Config.Ldap.Enabled {
+		logger.Log("MySQL based authentication is not implemented, please use LDAP")
+		return false
+	}
+
 	c, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(authorization, "Basic "))
 	if err != nil {
 		logger.Log(err)
@@ -403,11 +409,5 @@ func (s *MySQLMetaStore) authenticate(authorization string) bool {
 	}
 	user, password := cs[:i], cs[i+1:]
 
-	if config.Config.Ldap.Enabled {
-		return authenticateLdap(user, password)
-	}
-
-	logger.Log("MySQL based authentication is not implemented, please use LDAP")
-	return false
-
+	return ldap.AuthenticateLdap(user, password)
 }
