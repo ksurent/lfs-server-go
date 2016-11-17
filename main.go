@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
@@ -96,7 +97,7 @@ func findMetaStore() (m.GenericMetaStore, error) {
 	}
 }
 
-func findContentStore() (GenericContentStore, error) {
+func findContentStore() (content.GenericContentStore, error) {
 	logger.Log("Using content store " + config.Config.ContentStore)
 
 	switch config.Config.ContentStore {

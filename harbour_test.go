@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ksurent/lfs-server-go/config"
+	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
@@ -39,7 +40,7 @@ func TestGetAuthed(t *testing.T) {
 		t.Fatalf("expected response to contain content, got error: %s", err)
 	}
 
-	if string(by) != content {
+	if string(by) != contentStr {
 		t.Fatalf("expected content to be `content`, got: %s", string(by))
 	}
 }
@@ -238,7 +239,7 @@ func TestPut(t *testing.T) {
 	req.SetBasicAuth(testUser, testPass)
 	req.Header.Set("Accept", contentMediaType)
 	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(content)))
+	req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(contentStr)))
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -257,7 +258,7 @@ func TestPut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error reading content: %s", err)
 	}
-	if string(c) != content {
+	if string(c) != contentStr {
 		t.Fatalf("expected content, got `%s`", string(c))
 	}
 }
@@ -302,13 +303,13 @@ func TestMediaTypesParsed(t *testing.T) {
 var (
 	lfsServer         *httptest.Server
 	testMetaStore     m.GenericMetaStore
-	testContentStore  GenericContentStore
+	testContentStore  content.GenericContentStore
 	testUser          = "admin"
 	testPass          = "admin"
 	testAuth          = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
 	badAuth           = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("azog:defiler")))
-	content           = "this is my content"
-	contentSize       = int64(len(content))
+	contentStr        = "this is my content"
+	contentSize       = int64(len(contentStr))
 	contentOid        = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
 	nonexistingOid    = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
 	noAuthcontent     = "Some content goes here"
@@ -388,7 +389,7 @@ func seedMetaStore() error {
 
 func seedContentStore() error {
 	meta := &m.Object{Oid: contentOid, Size: contentSize}
-	buf := bytes.NewBuffer([]byte(content))
+	buf := bytes.NewBuffer([]byte(contentStr))
 	if err := testContentStore.Put(meta, buf); err != nil {
 		return err
 	}

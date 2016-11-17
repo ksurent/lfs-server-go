@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
 
@@ -25,13 +26,6 @@ type Representation struct {
 	Links map[string]*link `json:"_links"`
 }
 
-type GenericContentStore interface {
-	Get(meta *m.Object) (io.ReadCloser, error)
-	Put(meta *m.Object, r io.Reader) error
-	Exists(meta *m.Object) bool
-	Verify(meta *m.Object) error
-}
-
 // link provides a structure used to build a hypermedia representation of an HTTP link.
 type link struct {
 	Href   string            `json:"href"`
@@ -41,12 +35,12 @@ type link struct {
 // App links a Router, ContentStore, and MetaStore to provide the LFS server.
 type App struct {
 	router       *mux.Router
-	contentStore GenericContentStore
+	contentStore content.GenericContentStore
 	metaStore    m.GenericMetaStore
 }
 
 // NewApp creates a new App using the ContentStore and MetaStore provided
-func NewApp(content GenericContentStore, meta m.GenericMetaStore) *App {
+func NewApp(content content.GenericContentStore, meta m.GenericMetaStore) *App {
 	app := &App{contentStore: content, metaStore: meta}
 
 	r := mux.NewRouter()
