@@ -1,4 +1,4 @@
-package main
+package cassandra
 
 import (
 	"fmt"
@@ -14,21 +14,49 @@ type CassandraService struct {
 }
 
 // TODO: Add auth for cassandra
-func NewCassandraSession() *CassandraService {
+func NewCassandraSession() (*CassandraService, error) {
 	cluster := gocql.NewCluster(config.Config.Cassandra.Hosts)
 	cluster.ProtoVersion = config.Config.Cassandra.ProtoVersion
-	q := fmt.Sprintf("create keyspace if not exists %s_%s with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };", config.Config.Cassandra.Keyspace, config.GoEnv)
-	session, err := cluster.CreateSession()
-	err = session.Query(q).Exec()
-	session.Close()
-	cluster.Keyspace = fmt.Sprintf("%s_%s", config.Config.Cassandra.Keyspace, config.GoEnv)
-	cluster.Consistency = gocql.Quorum
-	session, err = cluster.CreateSession()
-	perror(initializeCassandra(session))
-	perror(err)
+
 	logger.Log("Connecting to " + config.Config.Cassandra.Hosts)
-	logger.Log("Namespace is " + config.Config.Cassandra.Keyspace + "_" + config.GoEnv)
-	return &CassandraService{Client: session}
+
+	keyspace := fmt.Sprintf("%s_%s", config.Config.Cassandra.Keyspace, config.GoEnv)
+	logger.Log("Using keyspace " + keyspace)
+
+	q := fmt.Sprintf(`
+		create keyspace if not exists
+			%s
+		with replication = {
+			'class': 'SimpleStrategy',
+			'replication_factor': 1
+		};
+	`, keyspace)
+
+	session, err := cluster.CreateSession()
+	if err != nil {
+		return nil, err
+	}
+
+	err = session.Query(q).Exec()
+	if err != nil {
+		return nil, err
+	}
+	session.Close()
+
+	cluster.Keyspace = keyspace
+	cluster.Consistency = gocql.Quorum
+
+	session, err = cluster.CreateSession()
+	if err != nil {
+		return nil, err
+	}
+
+	err = initializeCassandra(session)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CassandraService{Client: session}, nil
 }
 
 func initializeCassandra(session *gocql.Session) error {
@@ -68,6 +96,9 @@ func initializeCassandra(session *gocql.Session) error {
 func DropCassandra(session *gocql.Session) error {
 	m := fmt.Sprintf("%s_%s", config.Config.Cassandra.Keyspace, config.GoEnv)
 	q := fmt.Sprintf("drop keyspace %s;", m)
-	c := NewCassandraSession().Client
-	return c.Query(q).Exec()
+	sess, err := NewCassandraSession()
+	if err != nil {
+		return err
+	}
+	return sess.Client.Query(q).Exec()
 }

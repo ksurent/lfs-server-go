@@ -1,6 +1,7 @@
-package main
+package cassandra
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"testing"
@@ -11,6 +12,22 @@ import (
 
 var (
 	metaStoreTestCassandra *CassandraMetaStore
+)
+
+var (
+	testUser          = "admin"
+	testPass          = "admin"
+	testAuth          = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
+	badAuth           = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("azog:defiler")))
+	content           = "this is my content"
+	contentSize       = int64(len(content))
+	contentOid        = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
+	nonexistingOid    = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
+	noAuthcontent     = "Some content goes here"
+	noAuthContentSize = int64(len(noAuthcontent))
+	noAuthOid         = "4609ed10888c145d228409aa5587bab9fe166093bb7c155491a96d079c9149be"
+	extraRepo         = "mytestproject"
+	testRepo          = "repo"
 )
 
 func TestCassandraGetWithAuth(t *testing.T) {
@@ -47,12 +64,12 @@ func TestCassandraGetWithoutAuth(t *testing.T) {
 	defer teardownCassandraMeta()
 
 	_, err := metaStoreTestCassandra.Get(&m.RequestVars{Authorization: badAuth, Oid: contentOid})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
 	_, err = metaStoreTestCassandra.Get(&m.RequestVars{Oid: contentOid})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -162,12 +179,12 @@ func TestCassandraPutWithoutAuth(t *testing.T) {
 	defer teardownCassandraMeta()
 
 	_, err := metaStoreTestCassandra.Put(&m.RequestVars{Authorization: badAuth, User: testUser, Oid: contentOid, Size: 42})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
 	_, err = metaStoreTestCassandra.Put(&m.RequestVars{User: testUser, Oid: contentOid, Size: 42, Repo: testRepo})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -313,7 +330,7 @@ func TestProjectOidRelationship(t *testing.T) {
 }
 
 func setupCassandraMeta() error {
-	store, err := NewCassandraMetaStore(NewCassandraSession())
+	store, err := NewCassandraMetaStore()
 	if err != nil {
 		fmt.Printf("error initializing test meta store: %s\n", err)
 		return errors.New(fmt.Sprintf("error initializing test meta store: %s\n", err))
@@ -343,5 +360,10 @@ func setupCassandraMeta() error {
 }
 
 func teardownCassandraMeta() {
-	DropCassandra(NewCassandraSession().Client)
+	sess, err := NewCassandraSession()
+	if err != nil {
+		fmt.Printf("error tearing down cassandra test meta store: %s\n", err)
+		return
+	}
+	DropCassandra(sess.Client)
 }

@@ -1,7 +1,8 @@
-package main
+package cassandra
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -24,12 +25,18 @@ const (
 	CassandraCommittedTable        = "oids"
 )
 
-func NewCassandraMetaStore(cassandraService ...*CassandraService) (*CassandraMetaStore, error) {
-	if len(cassandraService) == 0 {
-		cassandraService = append(cassandraService, NewCassandraSession())
+var errUnsupported = errors.New("This feature is not supported by this backend")
+
+func NewCassandraMetaStore() (*CassandraMetaStore, error) {
+	sess, err := NewCassandraSession()
+	if err != nil {
+		return nil, err
 	}
-	cs := cassandraService[0]
-	return &CassandraMetaStore{cassandraService: cs, client: cs.Client}, nil
+
+	return &CassandraMetaStore{
+		cassandraService: sess,
+		client:           sess.Client,
+	}, nil
 }
 
 func (self *CassandraMetaStore) Close() {
@@ -339,7 +346,7 @@ Adds a user to the system, only for use when not using ldap
 */
 func (self *CassandraMetaStore) AddUser(user, pass string) error {
 	if config.Config.Ldap.Enabled {
-		return errNotImplemented
+		return ldap.ErrUseLdap
 	}
 	_, uErr := self.findUser(user)
 	// return nil if the user is already there
@@ -360,7 +367,7 @@ Usage: DeleteUser("testuser")
 */
 func (self *CassandraMetaStore) DeleteUser(user string) error {
 	if config.Config.Ldap.Enabled {
-		return errNotImplemented
+		return ldap.ErrUseLdap
 	}
 	return self.client.Query("delete from users where username = ?", user).Exec()
 }
@@ -370,7 +377,7 @@ returns all users, only for use when not using ldap
 */
 func (self *CassandraMetaStore) Users() ([]*m.User, error) {
 	if config.Config.Ldap.Enabled {
-		return []*m.User{}, errNotImplemented
+		return []*m.User{}, ldap.ErrUseLdap
 	}
 	var mu m.User
 	users := make([]*m.User, 0)
@@ -401,7 +408,7 @@ AddProject (create a new project using POST)
 Only implemented on MySQL meta store
 */
 func (self *CassandraMetaStore) AddProject(name string) error {
-	return errMySQLNotImplemented
+	return errUnsupported
 }
 
 /*
