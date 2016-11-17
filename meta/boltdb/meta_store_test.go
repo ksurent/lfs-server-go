@@ -1,6 +1,7 @@
-package main
+package boltdb
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"testing"
@@ -10,7 +11,20 @@ import (
 )
 
 var (
-	metaStoreTest *MetaStore
+	metaStoreTest     m.GenericMetaStore
+	testUser          = "admin"
+	testPass          = "admin"
+	testAuth          = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
+	badAuth           = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("azog:defiler")))
+	content           = "this is my content"
+	contentSize       = int64(len(content))
+	contentOid        = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
+	nonexistingOid    = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
+	noAuthcontent     = "Some content goes here"
+	noAuthContentSize = int64(len(noAuthcontent))
+	noAuthOid         = "4609ed10888c145d228409aa5587bab9fe166093bb7c155491a96d079c9149be"
+	extraRepo         = "mytestproject"
+	testRepo          = "repo"
 )
 
 func TestGetWithAuth(t *testing.T) {

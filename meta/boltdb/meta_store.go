@@ -1,4 +1,4 @@
-package main
+package boltdb
 
 import (
 	"bytes"
@@ -23,7 +23,8 @@ type MetaStore struct {
 }
 
 var (
-	errNoBucket = errors.New("Bucket not found")
+	errNoBucket    = errors.New("Bucket not found")
+	errUnsupported = errors.New("This feature is not supported by this backend")
 )
 
 var (
@@ -69,7 +70,7 @@ func (s *MetaStore) Get(rv *m.RequestVars) (*m.Object, error) {
 	if err != nil {
 		return nil, err
 	} else if !meta.Existing {
-		return nil, errObjectNotFound
+		return nil, m.ErrObjectNotFound
 	}
 
 	return meta, nil
@@ -99,7 +100,7 @@ func (s *MetaStore) doGet(rv *m.RequestVars) (*m.Object, error) {
 
 		value := bucket.Get([]byte(rv.Oid))
 		if len(value) == 0 {
-			return errObjectNotFound
+			return m.ErrObjectNotFound
 		}
 
 		dec := gob.NewDecoder(bytes.NewBuffer(value))
@@ -123,7 +124,7 @@ func (s *MetaStore) findProject(projectName string) (*m.Project, error) {
 		}
 		val := bucket.Get([]byte(projectName))
 		if len(val) < 1 {
-			return errProjectNotFound
+			return m.ErrProjectNotFound
 		}
 		dec := gob.NewDecoder(bytes.NewBuffer(val))
 		return dec.Decode(&project)
@@ -134,7 +135,7 @@ func (s *MetaStore) findProject(projectName string) (*m.Project, error) {
 	if project.Name != "" {
 		return project, nil
 	}
-	return nil, errProjectNotFound
+	return nil, m.ErrProjectNotFound
 }
 
 // Currently the OIDS are nil
@@ -255,14 +256,14 @@ func (s *MetaStore) Close() {
 // AddUser adds user credentials to the meta store.
 func (s *MetaStore) AddUser(user, pass string) error {
 	if config.Config.Ldap.Enabled {
-		return errNotImplemented
+		return ldap.ErrUseLdap
 	}
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(usersBucket)
 		if bucket == nil {
 			return errNoBucket
 		}
-		encryptedPass, err := encryptPass([]byte(pass))
+		encryptedPass, err := m.EncryptPass([]byte(pass))
 		if err != nil {
 			return err
 		}
@@ -277,7 +278,7 @@ func (s *MetaStore) AddUser(user, pass string) error {
 // DeleteUser removes user credentials from the meta store.
 func (s *MetaStore) DeleteUser(user string) error {
 	if config.Config.Ldap.Enabled {
-		return errNotImplemented
+		return ldap.ErrUseLdap
 	}
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(usersBucket)
@@ -295,7 +296,7 @@ func (s *MetaStore) DeleteUser(user string) error {
 // Users returns all m.Users in the meta store
 func (s *MetaStore) Users() ([]*m.User, error) {
 	if config.Config.Ldap.Enabled {
-		return []*m.User{}, errNotImplemented
+		return []*m.User{}, ldap.ErrUseLdap
 	}
 	var users []*m.User
 
@@ -379,7 +380,7 @@ func (s *MetaStore) authenticate(authorization string) bool {
 		value = string(bucket.Get([]byte(user)))
 		return nil
 	})
-	match, err := checkPass([]byte(value), []byte(password))
+	match, err := m.CheckPass([]byte(value), []byte(password))
 	if err != nil {
 		logger.Log(err)
 	}
@@ -409,10 +410,7 @@ func (s *MetaStore) Projects() ([]*m.Project, error) {
 	return projects, err
 }
 
-/*
-AddProject (create a new project using POST)
-Only implemented on MySQL meta store
-*/
+// TODO
 func (s *MetaStore) AddProject(name string) error {
-	return errMySQLNotImplemented
+	return errUnsupported
 }

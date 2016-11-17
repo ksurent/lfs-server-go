@@ -14,6 +14,7 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta/boltdb"
 )
 
 func TestGetAuthed(t *testing.T) {
@@ -325,7 +326,7 @@ func TestMain(m *testing.M) {
 	os.Remove("lfs-test.db")
 	config.Config.Ldap.Enabled = false
 	var err error
-	testMetaStore, err = NewMetaStore(config.Config.MetaDB)
+	testMetaStore, err = boltdb.NewMetaStore(config.Config.MetaDB)
 	if err != nil {
 		fmt.Printf("Error creating meta store: %s", err)
 		os.Exit(1)

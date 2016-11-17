@@ -15,6 +15,7 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta/boltdb"
 
 	"github.com/peterbourgon/g2g"
 )
@@ -83,8 +84,7 @@ func wrapHttps(l net.Listener, cert, key string) (net.Listener, error) {
 func findMetaStore() (m.GenericMetaStore, error) {
 	switch config.Config.BackingStore {
 	case "bolt":
-		m, err := NewMetaStore(config.Config.MetaDB)
-		return m, err
+		return boltdb.NewMetaStore(config.Config.MetaDB)
 	case "cassandra":
 		m, err := NewCassandraMetaStore(NewCassandraSession())
 		return m, err
@@ -95,8 +95,7 @@ func findMetaStore() (m.GenericMetaStore, error) {
 		}
 		return NewMySQLMetaStore(db)
 	default:
-		m, err := NewMetaStore(config.Config.MetaDB)
-		return m, err
+		return boltdb.NewMetaStore(config.Config.MetaDB)
 	}
 }
 
