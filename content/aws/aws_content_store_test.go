@@ -1,4 +1,4 @@
-package main
+package aws
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	m "github.com/ksurent/lfs-server-go/meta"
 
-	"github.com/mitchellh/goamz/aws"
+	aws_ "github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
 )
 
@@ -194,16 +194,25 @@ func TestAwsSettings(t *testing.T) {
 	}
 }
 
-func awsConnectForTest() *s3.Bucket {
+func awsConnectForTest() (*s3.Bucket, error) {
 	os.Setenv("AWS_ACCESS_KEY_ID", config.Config.Aws.AccessKeyId)
 	os.Setenv("AWS_SECRET_ACCESS_KEY", config.Config.Aws.SecretAccessKey)
-	auth, err := aws.EnvAuth()
-	perror(err)
-	return s3.New(auth, aws.Regions[config.Config.Aws.Region]).Bucket(config.Config.Aws.BucketName)
+	auth, err := aws_.EnvAuth()
+	if err != nil {
+		return nil, err
+	}
+	return s3.New(
+		auth,
+		aws_.Regions[config.Config.Aws.Region],
+	).Bucket(config.Config.Aws.BucketName), nil
 }
 
 func setupAwsTest() {
-	bucket := awsConnectForTest()
+	bucket, err := awsConnectForTest()
+	if err != nil {
+		fmt.Printf("error initializing content store: %s\n", err)
+		os.Exit(1)
+	}
 	bucket.PutBucket(s3.Private)
 	store, err := NewAwsContentStore()
 	if err != nil {
@@ -214,7 +223,10 @@ func setupAwsTest() {
 }
 
 func teardownAwsTest() {
-	bucket := awsConnectForTest()
+	bucket, err := awsConnectForTest()
+	if err != nil {
+		return
+	}
 	// remove all bucket contents
 	items, err := bucket.List("", "", "", 1000)
 	if err != nil {
