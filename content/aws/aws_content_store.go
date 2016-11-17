@@ -13,7 +13,7 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/logger"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 
 	aws_ "github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
@@ -75,19 +75,19 @@ func (s *AwsContentStore) makeBucket() error {
 	return nil
 }
 
-func (s *AwsContentStore) Get(meta *m.Object) (io.ReadCloser, error) {
-	path := content.TransformKey(meta.Oid)
+func (s *AwsContentStore) Get(m *meta.Object) (io.ReadCloser, error) {
+	path := content.TransformKey(m.Oid)
 	return s.bucket.GetReader(path)
 }
 
-func (s *AwsContentStore) getMetaData(meta *m.Object) (*s3.Key, error) {
-	path := content.TransformKey(meta.Oid)
+func (s *AwsContentStore) getMetaData(m *meta.Object) (*s3.Key, error) {
+	path := content.TransformKey(m.Oid)
 	return s.bucket.GetKey(path)
 }
 
 // TODO: maybe take write errors into account and buffer/resend to amazon?
-func (s *AwsContentStore) Put(meta *m.Object, r io.Reader) error {
-	path := content.TransformKey(meta.Oid)
+func (s *AwsContentStore) Put(m *meta.Object, r io.Reader) error {
+	path := content.TransformKey(m.Oid)
 	/*
 		There is probably a better way to compute this but we need to write the file to memory to
 		 compute the sha256 value and make sure what we're writing is correct.
@@ -102,27 +102,27 @@ func (s *AwsContentStore) Put(meta *m.Object, r io.Reader) error {
 		return err
 	}
 	// Check that we've written out the entire file for computing the sha
-	if written != meta.Size {
+	if written != m.Size {
 		return content.ErrSizeMismatch
 	}
 	shaStr := hex.EncodeToString(hash.Sum(nil))
-	if shaStr != meta.Oid {
+	if shaStr != m.Oid {
 		return content.ErrHashMismatch
 	}
-	retStat := s.bucket.PutReader(path, bytes.NewReader(buf), meta.Size, ContentType, s.acl)
-	k, kerr := s.getMetaData(meta)
+	retStat := s.bucket.PutReader(path, bytes.NewReader(buf), m.Size, ContentType, s.acl)
+	k, kerr := s.getMetaData(m)
 	if kerr != nil {
 		logger.Log(kerr)
 		return errWriteS3
 	}
-	if k.Size != meta.Size {
+	if k.Size != m.Size {
 		return content.ErrSizeMismatch
 	}
 	return retStat
 }
 
-func (s *AwsContentStore) Exists(meta *m.Object) bool {
-	path := content.TransformKey(meta.Oid)
+func (s *AwsContentStore) Exists(m *meta.Object) bool {
+	path := content.TransformKey(m.Oid)
 	// returns a 404 error if its not there
 	_, err := s.bucket.GetKey(path)
 	if err != nil {
@@ -137,7 +137,7 @@ func (s *AwsContentStore) Exists(meta *m.Object) bool {
 	return true
 }
 
-func (s *AwsContentStore) Verify(meta *m.Object) error {
+func (s *AwsContentStore) Verify(m *meta.Object) error {
 	return errNotImplemented
 }
 

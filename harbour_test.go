@@ -15,7 +15,7 @@ import (
 	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/content/fs"
 	"github.com/ksurent/lfs-server-go/logger"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
 )
 
@@ -80,19 +80,19 @@ func TestGetMetaAuthed(t *testing.T) {
 		t.Fatalf("expected status 200, got %d %s", res.StatusCode, req.URL)
 	}
 
-	var meta Representation
+	var m Representation
 	dec := json.NewDecoder(res.Body)
-	dec.Decode(&meta)
+	dec.Decode(&m)
 
-	if meta.Oid != contentOid {
-		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", contentOid, meta.Oid)
+	if m.Oid != contentOid {
+		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", contentOid, m.Oid)
 	}
 
-	if meta.Size != contentSize {
-		t.Fatalf("expected to see a size of `%d`, got: `%d`", contentSize, meta.Size)
+	if m.Size != contentSize {
+		t.Fatalf("expected to see a size of `%d`, got: `%d`", contentSize, m.Size)
 	}
 
-	download := meta.Links["download"]
+	download := m.Links["download"]
 
 	if download.Href != baseURL()+"/namespace/repo/objects/"+contentOid {
 		t.Fatalf("expected download link, got %s", download.Href)
@@ -136,24 +136,24 @@ func TestPostAuthedNewObject(t *testing.T) {
 		t.Fatalf("expected status 202, got %d", res.StatusCode)
 	}
 
-	var meta Representation
+	var m Representation
 	dec := json.NewDecoder(res.Body)
-	dec.Decode(&meta)
+	dec.Decode(&m)
 
-	if meta.Oid != nonexistingOid {
-		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", nonexistingOid, meta.Oid)
+	if m.Oid != nonexistingOid {
+		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", nonexistingOid, m.Oid)
 	}
 
-	if meta.Size != 1234 {
-		t.Fatalf("expected to see a size of `1234`, got: `%d`", meta.Size)
+	if m.Size != 1234 {
+		t.Fatalf("expected to see a size of `1234`, got: `%d`", m.Size)
 	}
 
-	if download, ok := meta.Links["download"]; ok {
+	if download, ok := m.Links["download"]; ok {
 		fmt.Println(ok)
 		t.Fatalf("expected POST to not contain a download link, got %v", download)
 	}
 
-	upload, ok := meta.Links["upload"]
+	upload, ok := m.Links["upload"]
 	if !ok {
 		t.Fatal("expected upload link to be present")
 	}
@@ -183,24 +183,24 @@ func TestPostAuthedExistingObject(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", res.StatusCode)
 	}
 
-	var meta Representation
+	var m Representation
 	dec := json.NewDecoder(res.Body)
-	dec.Decode(&meta)
+	dec.Decode(&m)
 
-	if meta.Oid != contentOid {
-		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", contentOid, meta.Oid)
+	if m.Oid != contentOid {
+		t.Fatalf("expected to see oid `%s` in meta, got: `%s`", contentOid, m.Oid)
 	}
 
-	if meta.Size != contentSize {
-		t.Fatalf("expected to see a size of `%d`, got: `%d`", contentSize, meta.Size)
+	if m.Size != contentSize {
+		t.Fatalf("expected to see a size of `%d`, got: `%d`", contentSize, m.Size)
 	}
 
-	download := meta.Links["download"]
+	download := m.Links["download"]
 	if download.Href != baseURL()+"/namespace/repo/objects/"+contentOid {
 		t.Fatalf("expected download link to be %s, got %s", baseURL()+"/namespace/repo/objects/"+contentOid, download.Href)
 	}
 
-	upload, ok := meta.Links["upload"]
+	upload, ok := m.Links["upload"]
 	if !ok {
 		t.Fatalf("expected upload link to be present")
 	}
@@ -251,7 +251,7 @@ func TestPut(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", res.StatusCode)
 	}
 
-	r, err := testContentStore.Get(&m.Object{Oid: contentOid})
+	r, err := testContentStore.Get(&meta.Object{Oid: contentOid})
 	if err != nil {
 		t.Fatalf("error retreiving from content store: %s", err)
 	}
@@ -303,7 +303,7 @@ func TestMediaTypesParsed(t *testing.T) {
 
 var (
 	lfsServer         *httptest.Server
-	testMetaStore     m.GenericMetaStore
+	testMetaStore     meta.GenericMetaStore
 	testContentStore  content.GenericContentStore
 	testUser          = "admin"
 	testPass          = "admin"
@@ -371,7 +371,7 @@ func seedMetaStore() error {
 		return err
 	}
 
-	rv := &m.RequestVars{
+	rv := &meta.RequestVars{
 		Authorization: testAuth,
 		Oid:           contentOid,
 		Size:          contentSize,
@@ -389,9 +389,9 @@ func seedMetaStore() error {
 }
 
 func seedContentStore() error {
-	meta := &m.Object{Oid: contentOid, Size: contentSize}
+	m := &meta.Object{Oid: contentOid, Size: contentSize}
 	buf := bytes.NewBuffer([]byte(contentStr))
-	if err := testContentStore.Put(meta, buf); err != nil {
+	if err := testContentStore.Put(m, buf); err != nil {
 		return err
 	}
 

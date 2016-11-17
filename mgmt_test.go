@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/ksurent/lfs-server-go/config"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 )
 
 type values map[string]string
@@ -45,7 +45,7 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	if res.StatusCode != 200 {
 		t.Fatalf("response code failed. Expected 200, got %d", res.StatusCode)
 	}
-	var metas []*m.Object
+	var metas []*meta.Object
 	data, _ := ioutil.ReadAll(res.Body)
 	// validate the request header
 	testRequestHeader(t, req, "Accept", "application/json")
@@ -53,20 +53,20 @@ func TestMgmtGetObjects_Json(t *testing.T) {
 	testResponseHeader(t, res, "Content-Type", "application/json")
 	json.Unmarshal(data, &metas)
 	var good bool
-	var meta *m.Object
+	var found *meta.Object
 	good = false
 	for _, m := range metas {
 		if m.Oid == contentOid {
-			meta = m
+			found = m
 			good = true
 		}
 	}
 	if !good {
-		t.Errorf("expected oid to be %+v, got %+v", contentOid, meta.Oid)
+		t.Errorf("expected oid to be %+v, got %+v", contentOid, found.Oid)
 	}
 }
 func TestMgmtGetProjects_Json(t *testing.T) {
-	_, err := testMetaStore.Put(&m.RequestVars{Repo: testRepo, User: testUser, Oid: contentOid, Authorization: testAuth})
+	_, err := testMetaStore.Put(&meta.RequestVars{Repo: testRepo, User: testUser, Oid: contentOid, Authorization: testAuth})
 	if err != nil {
 		fmt.Println("got an err", err.Error())
 	}
@@ -81,20 +81,20 @@ func TestMgmtGetProjects_Json(t *testing.T) {
 	if err != nil {
 		t.Fatalf("response error: %s", err)
 	}
-	var metas []*m.Project
-	var meta *m.Project
+	var metas []*meta.Project
+	var found *meta.Project
 	data, _ := ioutil.ReadAll(res.Body)
 	json.Unmarshal(data, &metas)
 	var good bool
 	good = false
 	for _, m := range metas {
 		if m.Name == testRepo {
-			meta = m
+			found = m
 			good = true
 		}
 	}
 	if !good {
-		t.Errorf("expected project name to be %+v, got %+v", testRepo, meta)
+		t.Errorf("expected project name to be %+v, got %+v", testRepo, found)
 	}
 
 }
@@ -115,19 +115,19 @@ func TestMgmtGetUsers_Json(t *testing.T) {
 	if err != nil {
 		t.Fatalf("response error: %s", err)
 	}
-	var meta *m.User
-	var metas []*m.User
+	var found *meta.User
+	var metas []*meta.User
 	data, _ := ioutil.ReadAll(res.Body)
 	json.Unmarshal(data, &metas)
 	var good bool
 	good = false
 	for _, m := range metas {
 		if m.Name == testUser {
-			meta = m
+			found = m
 			good = true
 		}
 	}
 	if !good {
-		t.Errorf("expected project name to be %+v, got %+v", testRepo, meta)
+		t.Errorf("expected user name to be %+v, got %+v", testUser, found.Name)
 	}
 }

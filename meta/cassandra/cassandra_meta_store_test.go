@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/ksurent/lfs-server-go/config"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 )
 
 var (
@@ -37,22 +37,22 @@ func TestCassandraGetWithAuth(t *testing.T) {
 	}
 	defer teardownCassandraMeta()
 
-	meta, err := metaStoreTestCassandra.Get(&m.RequestVars{Authorization: testAuth, Oid: noAuthOid})
+	m, err := metaStoreTestCassandra.Get(&meta.RequestVars{Authorization: testAuth, Oid: noAuthOid})
 	if err == nil {
-		t.Fatalf("expected get to fail with unknown oid, got: %s", meta.Oid)
+		t.Fatalf("expected get to fail with unknown oid, got: %s", m.Oid)
 	}
 
-	meta, err = metaStoreTestCassandra.Get(&m.RequestVars{Authorization: testAuth, Oid: contentOid})
+	m, err = metaStoreTestCassandra.Get(&meta.RequestVars{Authorization: testAuth, Oid: contentOid})
 	if err != nil {
 		t.Fatalf("expected get to succeed, got: %s", err)
 	}
 
-	if meta.Oid != contentOid {
-		t.Errorf("expected to get content oid, got: %s", meta.Oid)
+	if m.Oid != contentOid {
+		t.Errorf("expected to get content oid, got: %s", m.Oid)
 	}
 
-	if meta.Size != contentSize {
-		t.Errorf("expected to get content size, got: %d", meta.Size)
+	if m.Size != contentSize {
+		t.Errorf("expected to get content size, got: %d", m.Size)
 	}
 }
 
@@ -63,13 +63,13 @@ func TestCassandraGetWithoutAuth(t *testing.T) {
 	}
 	defer teardownCassandraMeta()
 
-	_, err := metaStoreTestCassandra.Get(&m.RequestVars{Authorization: badAuth, Oid: contentOid})
-	if !m.IsAuthError(err) {
+	_, err := metaStoreTestCassandra.Get(&meta.RequestVars{Authorization: badAuth, Oid: contentOid})
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
-	_, err = metaStoreTestCassandra.Get(&m.RequestVars{Oid: contentOid})
-	if !m.IsAuthError(err) {
+	_, err = metaStoreTestCassandra.Get(&meta.RequestVars{Oid: contentOid})
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -116,57 +116,57 @@ func TestCassandraPutWithAuth(t *testing.T) {
 	}
 	defer teardownCassandraMeta()
 
-	meta, err := metaStoreTestCassandra.Put(&m.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
+	m, err := metaStoreTestCassandra.Put(&meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
 	if err != nil {
 		t.Errorf("expected put to succeed, got: %s", err)
 	}
 
-	if meta.Existing {
+	if m.Existing {
 		t.Errorf("expected meta to not have existed")
 	}
 
-	_, err = metaStoreTestCassandra.Get(&m.RequestVars{Authorization: testAuth, Oid: nonexistingOid})
+	_, err = metaStoreTestCassandra.Get(&meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid})
 	if err == nil {
 		t.Errorf("expected new put to not be committed yet")
 	}
 
-	meta, err = metaStoreTestCassandra.GetPending(&m.RequestVars{Authorization: testAuth, Oid: nonexistingOid})
+	m, err = metaStoreTestCassandra.GetPending(&meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid})
 	if err != nil {
 		t.Errorf("expected new put to be pending, got: %s", err)
 	}
 
-	if meta.Oid != nonexistingOid {
-		t.Errorf("expected oids to match, got: %s", meta.Oid)
+	if m.Oid != nonexistingOid {
+		t.Errorf("expected oids to match, got: %s", m.Oid)
 	}
 
-	if meta.Size != 42 {
-		t.Errorf("expected sizes to match, got: %d", meta.Size)
+	if m.Size != 42 {
+		t.Errorf("expected sizes to match, got: %d", m.Size)
 	}
 
-	meta, err = metaStoreTestCassandra.Commit(&m.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
+	m, err = metaStoreTestCassandra.Commit(&meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
 	if err != nil {
 		t.Errorf("expected commit to succeed, got: %s", err)
 	}
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expected existing to become true after commit")
 	}
 
-	_, err = metaStoreTestCassandra.Get(&m.RequestVars{Authorization: testAuth, Oid: nonexistingOid})
+	_, err = metaStoreTestCassandra.Get(&meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid})
 	if err != nil {
 		t.Errorf("expected new put to be committed now, got: %s", err)
 	}
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expected existing to be true for a committed object")
 	}
 
-	meta, err = metaStoreTestCassandra.Put(&m.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
+	m, err = metaStoreTestCassandra.Put(&meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42})
 	if err != nil {
 		t.Errorf("expected putting an duplicate object to succeed, got: %s", err)
 	}
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expecting existing to be true for a duplicate object")
 	}
 }
@@ -178,13 +178,13 @@ func TestCassandraPutWithoutAuth(t *testing.T) {
 	}
 	defer teardownCassandraMeta()
 
-	_, err := metaStoreTestCassandra.Put(&m.RequestVars{Authorization: badAuth, User: testUser, Oid: contentOid, Size: 42})
-	if !m.IsAuthError(err) {
+	_, err := metaStoreTestCassandra.Put(&meta.RequestVars{Authorization: badAuth, User: testUser, Oid: contentOid, Size: 42})
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
-	_, err = metaStoreTestCassandra.Put(&m.RequestVars{User: testUser, Oid: contentOid, Size: 42, Repo: testRepo})
-	if !m.IsAuthError(err) {
+	_, err = metaStoreTestCassandra.Put(&meta.RequestVars{User: testUser, Oid: contentOid, Size: 42, Repo: testRepo})
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -343,7 +343,7 @@ func setupCassandraMeta() error {
 		return errors.New(fmt.Sprintf("error adding test user to meta store: %s\n", err))
 	}
 
-	rv := &m.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize, Repo: testRepo}
+	rv := &meta.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize, Repo: testRepo}
 
 	if _, err := metaStoreTestCassandra.Put(rv); err != nil {
 		teardownCassandraMeta()

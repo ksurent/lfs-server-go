@@ -9,7 +9,7 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/extauth/ldap"
 	"github.com/ksurent/lfs-server-go/logger"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/gocql/gocql"
 	"github.com/relops/cqlr"
@@ -98,53 +98,53 @@ func (self *CassandraMetaStore) removeProject(projectName string) error {
 	return self.client.Query("delete from projects where name = ?", projectName).Exec()
 }
 
-func (self *CassandraMetaStore) findProject(projectName string) (*m.Project, error) {
+func (self *CassandraMetaStore) findProject(projectName string) (*meta.Project, error) {
 	if projectName == "" {
-		return nil, m.ErrProjectNotFound
+		return nil, meta.ErrProjectNotFound
 	}
 	q := self.client.Query("select * from projects where name = ?", projectName)
 	b := cqlr.BindQuery(q)
-	var ct m.Project
+	var ct meta.Project
 	b.Scan(&ct)
 	defer b.Close()
 	if ct.Name == "" {
-		return nil, m.ErrProjectNotFound
+		return nil, meta.ErrProjectNotFound
 	}
 	return &ct, nil
 }
 
-func (self *CassandraMetaStore) findPendingOid(oid string) (*m.Object, error) {
-	meta, err := self.doFindOid(oid, CassandraPendingTable)
+func (self *CassandraMetaStore) findPendingOid(oid string) (*meta.Object, error) {
+	m, err := self.doFindOid(oid, CassandraPendingTable)
 	if err != nil {
 		return nil, err
 	}
 
-	meta.Existing = false
+	m.Existing = false
 
-	return meta, nil
+	return m, nil
 }
 
-func (self *CassandraMetaStore) findOid(oid string) (*m.Object, error) {
-	meta, err := self.doFindOid(oid, CassandraCommittedTable)
+func (self *CassandraMetaStore) findOid(oid string) (*meta.Object, error) {
+	m, err := self.doFindOid(oid, CassandraCommittedTable)
 	if err != nil {
 		return nil, err
 	}
 
-	meta.Existing = true
+	m.Existing = true
 
-	return meta, nil
+	return m, nil
 }
 
-func (self *CassandraMetaStore) doFindOid(oid, table string) (*m.Object, error) {
+func (self *CassandraMetaStore) doFindOid(oid, table string) (*meta.Object, error) {
 	q := self.client.Query("select oid, size from "+table+" where oid = ? limit 1", oid)
 	b := cqlr.BindQuery(q)
 	defer b.Close()
 
-	var meta m.Object
-	b.Scan(&meta)
+	var m meta.Object
+	b.Scan(&m)
 
-	if meta.Oid == "" {
-		return nil, m.ErrObjectNotFound
+	if m.Oid == "" {
+		return nil, meta.ErrObjectNotFound
 	}
 
 	itr := self.cassandraService.Client.Query("select name from projects where oids contains ?", oid).Iter()
@@ -152,101 +152,100 @@ func (self *CassandraMetaStore) doFindOid(oid, table string) (*m.Object, error) 
 
 	var project string
 	for itr.Scan(&project) {
-		meta.ProjectNames = append(meta.ProjectNames, project)
+		m.ProjectNames = append(m.ProjectNames, project)
 	}
 
-	return &meta, nil
+	return &m, nil
 }
 
 /*
-Oid finder - returns a []*m.Object
+Oid finder - returns a []*meta.Object
 */
-func (self *CassandraMetaStore) findAllOids() ([]*m.Object, error) {
+func (self *CassandraMetaStore) findAllOids() ([]*meta.Object, error) {
 	itr := self.cassandraService.Client.Query("select oid, size from oids;").Iter()
 	var oid string
 	var size int64
-	oid_list := make([]*m.Object, 0)
+	oid_list := make([]*meta.Object, 0)
 	for itr.Scan(&oid, &size) {
-		oid_list = append(oid_list, &m.Object{Oid: oid, Size: size})
+		oid_list = append(oid_list, &meta.Object{Oid: oid, Size: size})
 	}
 	itr.Close()
 	return oid_list, nil
 }
 
 /*
-Project finder - returns a []*m.Project
+Project finder - returns a []*meta.Project
 */
-func (self *CassandraMetaStore) findAllProjects() ([]*m.Project, error) {
+func (self *CassandraMetaStore) findAllProjects() ([]*meta.Project, error) {
 	itr := self.cassandraService.Client.Query("select name, oids from projects;").Iter()
 	var oids []string
 	var name string
-	project_list := make([]*m.Project, 0)
-	//	var project_list []*m.Project
+	project_list := []*meta.Project{}
 	for itr.Scan(&name, &oids) {
-		project_list = append(project_list, &m.Project{Name: name, Oids: oids})
+		project_list = append(project_list, &meta.Project{Name: name, Oids: oids})
 	}
 	itr.Close()
 	if len(project_list) == 0 {
-		return nil, m.ErrProjectNotFound
+		return nil, meta.ErrProjectNotFound
 	}
 	return project_list, nil
 }
 
-// Put() creates uncommitted objects from m.RequestVars and stores them in the
+// Put() creates uncommitted objects from meta.RequestVars and stores them in the
 // meta store
-func (self *CassandraMetaStore) Put(v *m.RequestVars) (*m.Object, error) {
+func (self *CassandraMetaStore) Put(v *meta.RequestVars) (*meta.Object, error) {
 	if !self.authenticate(v.Authorization) {
-		return nil, m.ErrNotAuthenticated
+		return nil, meta.ErrNotAuthenticated
 	}
 
 	// Don't care here if it's pending or committed
-	if meta, err := self.doGet(v); err == nil {
-		return meta, nil
+	if m, err := self.doGet(v); err == nil {
+		return m, nil
 	}
 
-	meta := &m.Object{
+	m := &meta.Object{
 		Oid:          v.Oid,
 		Size:         v.Size,
 		ProjectNames: []string{v.Repo},
 		Existing:     false,
 	}
 
-	err := self.doPut(meta)
+	err := self.doPut(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return meta, nil
+	return m, nil
 }
 
 // Commit() finds uncommitted objects in the meta store using data in
-// m.RequestVars and commits them
-func (self *CassandraMetaStore) Commit(v *m.RequestVars) (*m.Object, error) {
+// meta.RequestVars and commits them
+func (self *CassandraMetaStore) Commit(v *meta.RequestVars) (*meta.Object, error) {
 	if !self.authenticate(v.Authorization) {
-		return nil, m.ErrNotAuthenticated
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := self.GetPending(v)
+	m, err := self.GetPending(v)
 	if err != nil {
 		return nil, err
 	}
 
-	meta.Existing = true
+	m.Existing = true
 
-	err = self.doPut(meta)
+	err = self.doPut(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return meta, nil
+	return m, nil
 }
 
-func (self *CassandraMetaStore) doPut(meta *m.Object) error {
+func (self *CassandraMetaStore) doPut(m *meta.Object) error {
 
-	if !meta.Existing {
+	if !m.Existing {
 		// Creating pending object
 
-		if err := self.createPendingOid(meta.Oid, meta.Size); err != nil {
+		if err := self.createPendingOid(m.Oid, m.Size); err != nil {
 			return err
 		}
 
@@ -255,24 +254,24 @@ func (self *CassandraMetaStore) doPut(meta *m.Object) error {
 
 	// Committing pending object
 
-	if err := self.removePendingOid(meta.Oid); err != nil {
+	if err := self.removePendingOid(m.Oid); err != nil {
 		return err
 	}
 
 	// TODO transform this into a logged batch
 
-	if err := self.createOid(meta.Oid, meta.Size); err != nil {
+	if err := self.createOid(m.Oid, m.Size); err != nil {
 		return err
 	}
 
-	for _, project := range meta.ProjectNames {
+	for _, project := range m.ProjectNames {
 		// XXX pending projects?
 
 		if err := self.createProject(project); err != nil {
 			return err
 		}
 
-		if err := self.addOidToProject(meta.Oid, project); err != nil {
+		if err := self.addOidToProject(m.Oid, project); err != nil {
 			return err
 		}
 	}
@@ -281,62 +280,62 @@ func (self *CassandraMetaStore) doPut(meta *m.Object) error {
 }
 
 // Get() retrieves meta information for a committed object given information in
-// m.RequestVars
-func (self *CassandraMetaStore) Get(v *m.RequestVars) (*m.Object, error) {
+// meta.RequestVars
+func (self *CassandraMetaStore) Get(v *meta.RequestVars) (*meta.Object, error) {
 	if !self.authenticate(v.Authorization) {
-		return nil, m.ErrNotAuthenticated
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := self.doGet(v)
+	m, err := self.doGet(v)
 	if err != nil {
 		return nil, err
-	} else if !meta.Existing {
-		return nil, m.ErrObjectNotFound
+	} else if !m.Existing {
+		return nil, meta.ErrObjectNotFound
 	}
 
-	return meta, nil
+	return m, nil
 }
 
 // Same as Get() but for uncommitted objects
-func (self *CassandraMetaStore) GetPending(v *m.RequestVars) (*m.Object, error) {
+func (self *CassandraMetaStore) GetPending(v *meta.RequestVars) (*meta.Object, error) {
 	if !self.authenticate(v.Authorization) {
-		return nil, m.ErrNotAuthenticated
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := self.doGet(v)
+	m, err := self.doGet(v)
 	if err != nil {
 		return nil, err
 	}
 
-	return meta, nil
+	return m, nil
 }
 
-func (self *CassandraMetaStore) doGet(v *m.RequestVars) (*m.Object, error) {
+func (self *CassandraMetaStore) doGet(v *meta.RequestVars) (*meta.Object, error) {
 
-	if meta, err := self.findOid(v.Oid); err == nil {
-		meta.Existing = true
-		return meta, nil
+	if m, err := self.findOid(v.Oid); err == nil {
+		m.Existing = true
+		return m, nil
 	}
 
-	if meta, err := self.findPendingOid(v.Oid); err == nil {
-		meta.Existing = false
-		return meta, nil
+	if m, err := self.findPendingOid(v.Oid); err == nil {
+		m.Existing = false
+		return m, nil
 	}
 
-	return nil, m.ErrObjectNotFound
+	return nil, meta.ErrObjectNotFound
 }
 
 /*
 finds a user
 Usage: FindUser("testuser")
 */
-func (self *CassandraMetaStore) findUser(user string) (*m.User, error) {
-	var mu m.User
+func (self *CassandraMetaStore) findUser(user string) (*meta.User, error) {
+	var mu meta.User
 	q := self.client.Query("select * from users where username = ?", user)
 	b := cqlr.BindQuery(q)
 	b.Scan(&mu)
 	if mu.Name == "" {
-		return nil, m.ErrUserNotFound
+		return nil, meta.ErrUserNotFound
 	}
 	return &mu, nil
 }
@@ -353,7 +352,7 @@ func (self *CassandraMetaStore) AddUser(user, pass string) error {
 	if uErr == nil {
 		return nil
 	}
-	encryptedPass, err := m.EncryptPass([]byte(pass))
+	encryptedPass, err := meta.EncryptPass([]byte(pass))
 	if err != nil {
 		return err
 	}
@@ -375,12 +374,12 @@ func (self *CassandraMetaStore) DeleteUser(user string) error {
 /*
 returns all users, only for use when not using ldap
 */
-func (self *CassandraMetaStore) Users() ([]*m.User, error) {
+func (self *CassandraMetaStore) Users() ([]*meta.User, error) {
 	if config.Config.Ldap.Enabled {
-		return []*m.User{}, ldap.ErrUseLdap
+		return []*meta.User{}, ldap.ErrUseLdap
 	}
-	var mu m.User
-	users := make([]*m.User, 0)
+	var mu meta.User
+	users := make([]*meta.User, 0)
 	q := self.client.Query("select username from users")
 	b := cqlr.BindQuery(q)
 	for b.Scan(&mu) {
@@ -392,14 +391,14 @@ func (self *CassandraMetaStore) Users() ([]*m.User, error) {
 /*
 returns all Oids
 */
-func (self *CassandraMetaStore) Objects() ([]*m.Object, error) {
+func (self *CassandraMetaStore) Objects() ([]*meta.Object, error) {
 	return self.findAllOids()
 }
 
 /*
-Returns a []*m.Project
+Returns a []*meta.Project
 */
-func (self *CassandraMetaStore) Projects() ([]*m.Project, error) {
+func (self *CassandraMetaStore) Projects() ([]*meta.Project, error) {
 	return self.findAllProjects()
 }
 
@@ -451,7 +450,7 @@ func (self *CassandraMetaStore) authenticate(authorization string) bool {
 		return false
 	}
 
-	match, err := m.CheckPass([]byte(mu.Password), []byte(password))
+	match, err := meta.CheckPass([]byte(mu.Password), []byte(password))
 	if err != nil {
 		logger.Log(err)
 	}

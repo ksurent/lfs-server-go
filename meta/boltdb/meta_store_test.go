@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/ksurent/lfs-server-go/config"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 )
 
 var (
-	metaStoreTest     m.GenericMetaStore
+	metaStoreTest     meta.GenericMetaStore
 	testUser          = "admin"
 	testPass          = "admin"
 	testAuth          = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
@@ -31,17 +31,17 @@ func TestGetWithAuth(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	meta, err := metaStoreTest.Get(&m.RequestVars{Authorization: testAuth, Oid: contentOid})
+	m, err := metaStoreTest.Get(&meta.RequestVars{Authorization: testAuth, Oid: contentOid})
 	if err != nil {
 		t.Fatalf("Error retreiving meta: %s", err)
 	}
 
-	if meta.Oid != contentOid {
-		t.Errorf("expected to get content oid, got: %s", meta.Oid)
+	if m.Oid != contentOid {
+		t.Errorf("expected to get content oid, got: %s", m.Oid)
 	}
 
-	if meta.Size != contentSize {
-		t.Errorf("expected to get content size, got: %d", meta.Size)
+	if m.Size != contentSize {
+		t.Errorf("expected to get content size, got: %d", m.Size)
 	}
 }
 
@@ -49,8 +49,8 @@ func TestGetWithoutAuth(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	_, err := metaStoreTest.Get(&m.RequestVars{Authorization: badAuth, Oid: contentOid})
-	if !m.IsAuthError(err) {
+	_, err := metaStoreTest.Get(&meta.RequestVars{Authorization: badAuth, Oid: contentOid})
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -59,16 +59,16 @@ func TestPutWithAuth(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	getRv := &m.RequestVars{Authorization: testAuth, Oid: nonexistingOid}
+	getRv := &meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid}
 
-	putRv := &m.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42}
+	putRv := &meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42}
 
-	meta, err := metaStoreTest.Put(putRv)
+	m, err := metaStoreTest.Put(putRv)
 	if err != nil {
 		t.Errorf("expected put to succeed, got : %s", err)
 	}
 
-	if meta.Existing {
+	if m.Existing {
 		t.Errorf("expected meta to not have existed")
 	}
 
@@ -82,17 +82,17 @@ func TestPutWithAuth(t *testing.T) {
 		t.Errorf("expected to be able to retrieve pending put, got: %s", err)
 	}
 
-	if meta.Oid != nonexistingOid {
-		t.Errorf("expected oids to match, got: %s", meta.Oid)
+	if m.Oid != nonexistingOid {
+		t.Errorf("expected oids to match, got: %s", m.Oid)
 	}
 
-	if meta.Size != 42 {
-		t.Errorf("expected sizes to match, got: %d", meta.Size)
+	if m.Size != 42 {
+		t.Errorf("expected sizes to match, got: %d", m.Size)
 	}
 
-	meta, err = metaStoreTest.Commit(putRv)
+	m, err = metaStoreTest.Commit(putRv)
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expected existing to become true after commit")
 	}
 
@@ -101,16 +101,16 @@ func TestPutWithAuth(t *testing.T) {
 		t.Errorf("expected new put to be committed now, got: %s", err)
 	}
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expected existing to be true for a committed object")
 	}
 
-	meta, err = metaStoreTest.Put(putRv)
+	m, err = metaStoreTest.Put(putRv)
 	if err != nil {
 		t.Errorf("expected putting a duplicate object to succeed, got: %s", err)
 	}
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expecting existing to be true for a duplicate object")
 	}
 }
@@ -119,8 +119,8 @@ func TestPuthWithoutAuth(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	_, err := metaStoreTest.Put(&m.RequestVars{Authorization: badAuth, Oid: contentOid, Size: 42})
-	if !m.IsAuthError(err) {
+	_, err := metaStoreTest.Put(&meta.RequestVars{Authorization: badAuth, Oid: contentOid, Size: 42})
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -140,7 +140,7 @@ func setupMeta() {
 		os.Exit(1)
 	}
 
-	rv := &m.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize}
+	rv := &meta.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize}
 
 	if _, err := metaStoreTest.Put(rv); err != nil {
 		teardownMeta()

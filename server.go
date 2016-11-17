@@ -13,7 +13,7 @@ import (
 
 	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/logger"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
@@ -36,12 +36,12 @@ type link struct {
 type App struct {
 	router       *mux.Router
 	contentStore content.GenericContentStore
-	metaStore    m.GenericMetaStore
+	metaStore    meta.GenericMetaStore
 }
 
 // NewApp creates a new App using the ContentStore and MetaStore provided
-func NewApp(content content.GenericContentStore, meta m.GenericMetaStore) *App {
-	app := &App{contentStore: content, metaStore: meta}
+func NewApp(c content.GenericContentStore, m meta.GenericMetaStore) *App {
+	app := &App{contentStore: c, metaStore: m}
 
 	r := mux.NewRouter()
 
@@ -85,17 +85,17 @@ func (a *App) Serve(l net.Listener) error {
 // GetContentHandler gets the content from the content store
 func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
-	meta, err := a.metaStore.Get(rv)
+	m, err := a.metaStore.Get(rv)
 	if err != nil {
 		logger.Log(err)
 
-		if m.IsAuthError(err) {
+		if meta.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
 	}
 
-	reader, err := a.contentStore.Get(meta)
+	reader, err := a.contentStore.Get(m)
 	if err != nil {
 		logger.Log(err)
 
@@ -115,7 +115,7 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) int {
 	if err != nil {
 		logger.Log(err)
 
-		if m.IsAuthError(err) {
+		if meta.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -127,11 +127,11 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) int {
 // GetMetaHandler retrieves metadata about the object
 func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
-	meta, err := a.metaStore.Get(rv)
+	m, err := a.metaStore.Get(rv)
 	if err != nil {
 		logger.Log(err)
 
-		if m.IsAuthError(err) {
+		if meta.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -141,7 +141,7 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 
 	if r.Method == "GET" {
 		enc := json.NewEncoder(w)
-		enc.Encode(a.Represent(rv, meta, true, false, false))
+		enc.Encode(a.Represent(rv, m, true, false, false))
 	}
 
 	return http.StatusOK
@@ -150,11 +150,11 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 // PostHandler instructs the client how to upload data (legacy API)
 func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
-	meta, err := a.metaStore.Put(rv)
+	m, err := a.metaStore.Put(rv)
 	if err != nil {
 		logger.Log(err)
 
-		if m.IsAuthError(err) {
+		if meta.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -163,15 +163,15 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	w.Header().Set("Content-Type", metaMediaType)
 
 	sentStatus := 202
-	if meta.Existing && a.contentStore.Exists(meta) {
+	if m.Existing && a.contentStore.Exists(m) {
 		sentStatus = 200
 	}
 	w.WriteHeader(sentStatus)
 
 	enc := json.NewEncoder(w)
-	enc.Encode(a.Represent(rv, meta, meta.Existing, true, true))
+	enc.Encode(a.Represent(rv, m, m.Existing, true, true))
 
-	if !meta.Existing {
+	if !m.Existing {
 		go metaPending.Add(1)
 	}
 
@@ -187,11 +187,11 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 	for _, object := range bv.Objects {
 		// Put() checks if the object already exists in the meta store and
 		// returns it if it does
-		meta, err := a.metaStore.Put(object)
+		m, err := a.metaStore.Put(object)
 		if err != nil {
 			logger.Log(err)
 
-			if m.IsAuthError(err) {
+			if meta.IsAuthError(err) {
 				return requireAuth(w, r)
 			}
 
@@ -200,10 +200,10 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 
 		responseObjects = append(
 			responseObjects,
-			a.Represent(object, meta, meta.Existing, !meta.Existing, true),
+			a.Represent(object, m, m.Existing, !m.Existing, true),
 		)
 
-		if !meta.Existing {
+		if !m.Existing {
 			go metaPending.Add(1)
 		}
 	}
@@ -225,17 +225,17 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 // PutHandler receives data from the client and puts it into the content store
 func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
-	meta, err := a.metaStore.GetPending(rv)
+	m, err := a.metaStore.GetPending(rv)
 	if err != nil {
 		logger.Log(err)
 
-		if m.IsAuthError(err) {
+		if meta.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
 	}
 
-	if err := a.contentStore.Put(meta, r.Body); err != nil {
+	if err := a.contentStore.Put(m, r.Body); err != nil {
 		logger.Log(err)
 
 		return http.StatusInternalServerError
@@ -255,11 +255,11 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 
 func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
-	meta, err := a.metaStore.Get(rv)
+	m, err := a.metaStore.Get(rv)
 	if err != nil {
 		logger.Log(err)
 
-		if m.IsAuthError(err) {
+		if meta.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -268,7 +268,7 @@ func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) int {
 	w.Header().Set("Content-Type", metaMediaType)
 
 	status := http.StatusNotFound
-	if a.contentStore.Verify(meta) == nil {
+	if a.contentStore.Verify(m) == nil {
 		status = http.StatusOK
 	}
 
@@ -290,12 +290,12 @@ func (a *App) DebugHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "\n}\n")
 }
 
-// Represent takes a m.RequestVars and Meta and turns it into a Representation suitable
+// Represent takes a meta.RequestVars and Meta and turns it into a Representation suitable
 // for json encoding
-func (a *App) Represent(rv *m.RequestVars, meta *m.Object, download, upload, verify bool) *Representation {
+func (a *App) Represent(rv *meta.RequestVars, m *meta.Object, download, upload, verify bool) *Representation {
 	rep := &Representation{
-		Oid:   meta.Oid,
-		Size:  meta.Size,
+		Oid:   m.Oid,
+		Size:  m.Size,
 		Links: make(map[string]*link),
 	}
 
@@ -336,9 +336,9 @@ func MetaMatcher(r *http.Request, m *mux.RouteMatch) bool {
 	return mt == metaMediaType
 }
 
-func unpack(r *http.Request) *m.RequestVars {
+func unpack(r *http.Request) *meta.RequestVars {
 	vars := mux.Vars(r)
-	rv := &m.RequestVars{
+	rv := &meta.RequestVars{
 		Namespace:     vars["namespace"],
 		Repo:          vars["repo"],
 		Oid:           vars["oid"],
@@ -346,7 +346,7 @@ func unpack(r *http.Request) *m.RequestVars {
 	}
 
 	if r.Method == "POST" { // Maybe also check if +json
-		var p m.RequestVars
+		var p meta.RequestVars
 		dec := json.NewDecoder(r.Body)
 		err := dec.Decode(&p)
 		if err != nil {
@@ -361,10 +361,10 @@ func unpack(r *http.Request) *m.RequestVars {
 }
 
 // TODO cheap hack, unify with unpack
-func unpackbatch(r *http.Request) *m.BatchVars {
+func unpackbatch(r *http.Request) *meta.BatchVars {
 	vars := mux.Vars(r)
 
-	var bv m.BatchVars
+	var bv meta.BatchVars
 
 	dec := json.NewDecoder(r.Body)
 	err := dec.Decode(&bv)

@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/ksurent/lfs-server-go/config"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 )
 
 var (
-	metaStoreTestMySQL m.GenericMetaStore
+	metaStoreTestMySQL meta.GenericMetaStore
 	testUser           = "admin"
 	testPass           = "admin"
 	testAuth           = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
@@ -60,23 +60,23 @@ func TestMySQLPutWithAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	rvPut := &m.RequestVars{
+	rvPut := &meta.RequestVars{
 		Authorization: testAuth,
 		Oid:           nonexistingOid,
 		Size:          42,
 		Repo:          testRepo,
 	}
-	rvGet := &m.RequestVars{
+	rvGet := &meta.RequestVars{
 		Authorization: testAuth,
 		Oid:           nonexistingOid,
 	}
 
-	meta, err := metaStoreTestMySQL.Put(rvPut)
+	m, err := metaStoreTestMySQL.Put(rvPut)
 	if err != nil {
 		t.Errorf("expected put to succeed, got: %s", err)
 	}
 
-	if meta.Existing {
+	if m.Existing {
 		t.Errorf("expected meta to not have existed")
 	}
 
@@ -85,25 +85,25 @@ func TestMySQLPutWithAuth(t *testing.T) {
 		t.Errorf("expected new put to not be committed yet")
 	}
 
-	meta, err = metaStoreTestMySQL.GetPending(rvGet)
+	m, err = metaStoreTestMySQL.GetPending(rvGet)
 	if err != nil {
 		t.Errorf("expected new put to be pending")
 	}
 
-	if meta.Oid != nonexistingOid {
-		t.Errorf("expected oids to match, got: %s", meta.Oid)
+	if m.Oid != nonexistingOid {
+		t.Errorf("expected oids to match, got: %s", m.Oid)
 	}
 
-	if meta.Size != 42 {
-		t.Errorf("expected sizes to match, got: %d", meta.Size)
+	if m.Size != 42 {
+		t.Errorf("expected sizes to match, got: %d", m.Size)
 	}
 
-	meta, err = metaStoreTestMySQL.Commit(rvPut)
+	m, err = metaStoreTestMySQL.Commit(rvPut)
 	if err != nil {
 		t.Errorf("expected commit to succeed, got: %s", err)
 	}
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expected existing to become true after commit")
 	}
 
@@ -112,16 +112,16 @@ func TestMySQLPutWithAuth(t *testing.T) {
 		t.Errorf("expected new put to be committed now")
 	}
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expected existing to be true for a committed object")
 	}
 
-	meta, err = metaStoreTestMySQL.Put(rvPut)
+	m, err = metaStoreTestMySQL.Put(rvPut)
 	if err != nil {
 		t.Errorf("expected putting an duplicate object to succeed, got: %s", err)
 	}
 
-	if !meta.Existing {
+	if !m.Existing {
 		t.Errorf("expecting existing to be true for a duplicate object")
 	}
 }
@@ -132,24 +132,24 @@ func TestMySQLPutWithoutAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	_, err := metaStoreTestMySQL.Put(&m.RequestVars{
+	_, err := metaStoreTestMySQL.Put(&meta.RequestVars{
 		Authorization: badAuth,
 		User:          testUser,
 		Oid:           contentOid,
 		Size:          42,
 		Repo:          testRepo,
 	})
-	if !m.IsAuthError(err) {
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
-	_, err = metaStoreTestMySQL.Put(&m.RequestVars{
+	_, err = metaStoreTestMySQL.Put(&meta.RequestVars{
 		User: testUser,
 		Oid:  contentOid,
 		Size: 42,
 		Repo: testRepo,
 	})
-	if !m.IsAuthError(err) {
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -160,22 +160,22 @@ func TestMySQLGetWithAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	meta, err := metaStoreTestMySQL.Get(&m.RequestVars{Authorization: testAuth, Oid: noAuthOid})
+	m, err := metaStoreTestMySQL.Get(&meta.RequestVars{Authorization: testAuth, Oid: noAuthOid})
 	if err == nil {
-		t.Fatalf("expected get to fail with unknown oid, got: %s", meta.Oid)
+		t.Fatalf("expected get to fail with unknown oid, got: %s", m.Oid)
 	}
 
-	meta, err = metaStoreTestMySQL.Get(&m.RequestVars{Authorization: testAuth, Oid: contentOid})
+	m, err = metaStoreTestMySQL.Get(&meta.RequestVars{Authorization: testAuth, Oid: contentOid})
 	if err != nil {
 		t.Fatalf("expected get to succeed, got: %s", err)
 	}
 
-	if meta.Oid != contentOid {
-		t.Errorf("expected to get content oid, got: %s", meta.Oid)
+	if m.Oid != contentOid {
+		t.Errorf("expected to get content oid, got: %s", m.Oid)
 	}
 
-	if meta.Size != contentSize {
-		t.Errorf("expected to get content size, got: %d", meta.Size)
+	if m.Size != contentSize {
+		t.Errorf("expected to get content size, got: %d", m.Size)
 	}
 }
 
@@ -185,13 +185,13 @@ func TestMySQLGetWithoutAuth(t *testing.T) {
 		t.Errorf(serr.Error())
 	}
 
-	_, err := metaStoreTestMySQL.Get(&m.RequestVars{Authorization: badAuth, Oid: noAuthOid})
-	if !m.IsAuthError(err) {
+	_, err := metaStoreTestMySQL.Get(&meta.RequestVars{Authorization: badAuth, Oid: noAuthOid})
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
-	_, err = metaStoreTestMySQL.Get(&m.RequestVars{Oid: noAuthOid})
-	if !m.IsAuthError(err) {
+	_, err = metaStoreTestMySQL.Get(&meta.RequestVars{Oid: noAuthOid})
+	if !meta.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -220,7 +220,7 @@ func setupMySQLMeta() error {
 	mysqlStore.client.Exec("TRUNCATE TABLE oids")
 	mysqlStore.client.Exec("TRUNCATE TABLE projects")
 
-	rv := &m.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize, Repo: testRepo}
+	rv := &meta.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize, Repo: testRepo}
 
 	if _, err := metaStoreTestMySQL.Put(rv); err != nil {
 		return errors.New(fmt.Sprintf("error seeding mysql test meta store: %s\n", err))

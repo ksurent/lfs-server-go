@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/ksurent/lfs-server-go/config"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 
 	aws_ "github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
@@ -25,7 +25,7 @@ func TestAwsContentStorePut(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &m.Object{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -49,7 +49,7 @@ func TestAwsContentStorePutHashMismatch(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &m.Object{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -69,7 +69,7 @@ func TestAwsContentStorePutSizeMismatch(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &m.Object{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 14,
 	}
@@ -90,7 +90,7 @@ func TestAwsContentStoreGet(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &m.Object{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}
@@ -120,7 +120,7 @@ func TestAwsContentStoreGetNonExisting(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	_, err := awsContentStore.Get(&m.Object{Oid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	_, err := awsContentStore.Get(&meta.Object{Oid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
 	if err == nil {
 		t.Fatalf("expected to get an error, but content existed")
 	}
@@ -134,7 +134,7 @@ func TestAwsContentStoreExists(t *testing.T) {
 	setupAwsTest()
 	defer teardownAwsTest()
 
-	m := &m.Object{
+	m := &meta.Object{
 		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
 		Size: 12,
 	}

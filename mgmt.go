@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/ksurent/lfs-server-go/config"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/GeertJohan/go.rice"
 	"github.com/gorilla/mux"
@@ -25,9 +25,9 @@ type pageData struct {
 	Name       string
 	Config     *config.Configuration
 	ConfigDump map[string]interface{}
-	Users      []*m.User
-	Objects    []*m.Object
-	Projects   []*m.Project
+	Users      []*meta.User
+	Objects    []*meta.Object
+	Projects   []*meta.Project
 }
 
 func (a *App) addMgmt(r *mux.Router) {

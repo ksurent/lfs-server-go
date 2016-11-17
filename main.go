@@ -17,7 +17,7 @@ import (
 	"github.com/ksurent/lfs-server-go/content/aws"
 	"github.com/ksurent/lfs-server-go/content/fs"
 	"github.com/ksurent/lfs-server-go/logger"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
 	"github.com/ksurent/lfs-server-go/meta/cassandra"
 	"github.com/ksurent/lfs-server-go/meta/mysql"
@@ -86,7 +86,7 @@ func wrapHttps(l net.Listener, cert, key string) (net.Listener, error) {
 	return tlsListener, nil
 }
 
-func findMetaStore() (m.GenericMetaStore, error) {
+func findMetaStore() (meta.GenericMetaStore, error) {
 	switch config.Config.BackingStore {
 	case "bolt":
 		return boltdb.NewMetaStore(config.Config.MetaDB)

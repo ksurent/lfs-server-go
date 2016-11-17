@@ -8,7 +8,7 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/extauth/ldap"
 	"github.com/ksurent/lfs-server-go/logger"
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 )
 
 type MySQLMetaStore struct {
@@ -31,7 +31,7 @@ func (s *MySQLMetaStore) Close() {
 }
 
 // Find all committed meta objects (called from the management interface)
-func (s *MySQLMetaStore) findAllOids() ([]*m.Object, error) {
+func (s *MySQLMetaStore) findAllOids() ([]*meta.Object, error) {
 	rows, err := s.client.Query("select oid, size from oids where pending = 0")
 	if err != nil {
 		logger.Log(err)
@@ -42,7 +42,7 @@ func (s *MySQLMetaStore) findAllOids() ([]*m.Object, error) {
 	var (
 		oid     string
 		size    int64
-		oidList []*m.Object
+		oidList []*meta.Object
 	)
 
 	for rows.Next() {
@@ -50,7 +50,7 @@ func (s *MySQLMetaStore) findAllOids() ([]*m.Object, error) {
 		if err != nil {
 			return nil, err
 		}
-		oidList = append(oidList, &m.Object{Oid: oid, Size: size})
+		oidList = append(oidList, &meta.Object{Oid: oid, Size: size})
 	}
 
 	err = rows.Err()
@@ -91,7 +91,7 @@ func (s *MySQLMetaStore) mapOid(id int) ([]string, error) {
 }
 
 // Find all committed projects
-func (s *MySQLMetaStore) findAllProjects() ([]*m.Project, error) {
+func (s *MySQLMetaStore) findAllProjects() ([]*meta.Project, error) {
 	rows, err := s.client.Query("select id, name from projects where pending = 0")
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (s *MySQLMetaStore) findAllProjects() ([]*m.Project, error) {
 	var (
 		name        string
 		id          int
-		projectList []*m.Project
+		projectList []*meta.Project
 	)
 
 	for rows.Next() {
@@ -115,7 +115,7 @@ func (s *MySQLMetaStore) findAllProjects() ([]*m.Project, error) {
 			return nil, err
 		}
 
-		projectList = append(projectList, &m.Project{Name: name, Oids: oids})
+		projectList = append(projectList, &meta.Project{Name: name, Oids: oids})
 	}
 
 	err = rows.Err()
@@ -133,15 +133,15 @@ func (s *MySQLMetaStore) createProject(name string) error {
 }
 
 // Transactionally change status from pending to committed
-func (s *MySQLMetaStore) commitPendingObject(meta *m.Object) error {
+func (s *MySQLMetaStore) commitPendingObject(m *meta.Object) error {
 	tx, err := s.client.Begin()
 	if err != nil {
 		return err
 	}
 
-	tx.Exec("update oids set pending = 0 where oid = ?", meta.Oid)
+	tx.Exec("update oids set pending = 0 where oid = ?", m.Oid)
 
-	for _, name := range meta.ProjectNames {
+	for _, name := range m.ProjectNames {
 		tx.Exec("update projects set pending = 0 where name = ?", name)
 	}
 
@@ -149,15 +149,15 @@ func (s *MySQLMetaStore) commitPendingObject(meta *m.Object) error {
 }
 
 // Transactionally create pending oid and related data
-func (s *MySQLMetaStore) createPendingObject(meta *m.Object) error {
+func (s *MySQLMetaStore) createPendingObject(m *meta.Object) error {
 	tx, err := s.client.Begin()
 	if err != nil {
 		return err
 	}
 
-	tx.Exec("insert into oids (oid, size, pending) values (?, ?, 1)", meta.Oid, meta.Size)
+	tx.Exec("insert into oids (oid, size, pending) values (?, ?, 1)", m.Oid, m.Size)
 
-	for _, name := range meta.ProjectNames {
+	for _, name := range m.ProjectNames {
 		res, err := tx.Exec(`
 			insert into
 				projects (name, pending)
@@ -168,16 +168,16 @@ func (s *MySQLMetaStore) createPendingObject(meta *m.Object) error {
 		`, name)
 		if err == nil {
 			id, _ := res.LastInsertId()
-			tx.Exec("insert into oid_maps (oid, projectID) values (?, ?)", meta.Oid, id)
+			tx.Exec("insert into oid_maps (oid, projectID) values (?, ?)", m.Oid, id)
 		}
 	}
 
 	return tx.Commit()
 }
 
-func (s *MySQLMetaStore) findOid(oid string, pending bool) (*m.Object, error) {
+func (s *MySQLMetaStore) findOid(oid string, pending bool) (*meta.Object, error) {
 
-	meta := m.Object{Existing: !pending}
+	m := meta.Object{Existing: !pending}
 
 	n := 0
 	if pending {
@@ -192,13 +192,13 @@ func (s *MySQLMetaStore) findOid(oid string, pending bool) (*m.Object, error) {
 		where
 			oid = ?
 			and pending = ?
-	`, oid, n).Scan(&meta.Oid, &meta.Size)
+	`, oid, n).Scan(&m.Oid, &m.Size)
 	if err != nil {
 		return nil, err
 	}
 
-	if meta.Oid == "" {
-		return nil, m.ErrObjectNotFound
+	if m.Oid == "" {
+		return nil, meta.ErrObjectNotFound
 	}
 
 	rows, err := s.client.Query(`
@@ -226,7 +226,7 @@ func (s *MySQLMetaStore) findOid(oid string, pending bool) (*m.Object, error) {
 			return nil, err
 		}
 
-		meta.ProjectNames = append(meta.ProjectNames, name)
+		m.ProjectNames = append(m.ProjectNames, name)
 	}
 
 	err = rows.Err()
@@ -234,100 +234,90 @@ func (s *MySQLMetaStore) findOid(oid string, pending bool) (*m.Object, error) {
 		return nil, err
 	}
 
-	return &meta, nil
+	return &m, nil
 }
 
-// Put() creates uncommitted objects from m.RequestVars and stores them in the
+// Put() creates uncommitted objects from meta.RequestVars and stores them in the
 // meta store
-func (s *MySQLMetaStore) Put(v *m.RequestVars) (*m.Object, error) {
+func (s *MySQLMetaStore) Put(v *meta.RequestVars) (*meta.Object, error) {
 	if !s.authenticate(v.Authorization) {
-		return nil, m.ErrNotAuthenticated
+		return nil, meta.ErrNotAuthenticated
 	}
 
 	// Don't care here if it's pending or committed
 	// TODO one query
-	if meta, err := s.findOid(v.Oid, false); err == nil {
-		return meta, nil
+	if m, err := s.findOid(v.Oid, false); err == nil {
+		return m, nil
 	}
-	if meta, err := s.findOid(v.Oid, true); err == nil {
-		return meta, nil
+	if m, err := s.findOid(v.Oid, true); err == nil {
+		return m, nil
 	}
 
-	meta := &m.Object{
+	m := &meta.Object{
 		Oid:          v.Oid,
 		Size:         v.Size,
 		ProjectNames: []string{v.Repo},
 		Existing:     false,
 	}
 
-	err := s.doPut(meta)
+	err := s.doPut(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return meta, nil
+	return m, nil
 }
 
 // Commit() finds uncommitted objects in the meta store using data in
-// m.RequestVars and commits them
-func (s *MySQLMetaStore) Commit(v *m.RequestVars) (*m.Object, error) {
+// meta.RequestVars and commits them
+func (s *MySQLMetaStore) Commit(v *meta.RequestVars) (*meta.Object, error) {
 	if !s.authenticate(v.Authorization) {
-		return nil, m.ErrNotAuthenticated
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := s.GetPending(v)
+	m, err := s.GetPending(v)
 	if err != nil {
 		return nil, err
 	}
 
-	meta.Existing = true
+	m.Existing = true
 
-	err = s.doPut(meta)
+	err = s.doPut(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return meta, nil
+	return m, nil
 }
 
-func (s *MySQLMetaStore) doPut(meta *m.Object) error {
-	if !meta.Existing {
-		if err := s.createPendingObject(meta); err != nil {
+func (s *MySQLMetaStore) doPut(m *meta.Object) error {
+	if !m.Existing {
+		if err := s.createPendingObject(m); err != nil {
 			return err
 		}
 
 		return nil
 	}
 
-	return s.commitPendingObject(meta)
+	return s.commitPendingObject(m)
 }
 
-func (s *MySQLMetaStore) Get(v *m.RequestVars) (*m.Object, error) {
+func (s *MySQLMetaStore) Get(v *meta.RequestVars) (*meta.Object, error) {
 	if !s.authenticate(v.Authorization) {
-		return nil, m.ErrNotAuthenticated
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := s.findOid(v.Oid, false)
-	if err != nil {
-		return nil, err
-	}
-
-	return meta, nil
+	return s.findOid(v.Oid, false)
 }
 
 // Get() retrieves meta information for a committed object given information in
-// m.RequestVars
-func (s *MySQLMetaStore) GetPending(v *m.RequestVars) (*m.Object, error) {
+// meta.RequestVars
+func (s *MySQLMetaStore) GetPending(v *meta.RequestVars) (*meta.Object, error) {
 	if !s.authenticate(v.Authorization) {
-		return nil, m.ErrNotAuthenticated
+		return nil, meta.ErrNotAuthenticated
 	}
 
-	meta, err := s.findOid(v.Oid, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return meta, nil
+	return s.findOid(v.Oid, true)
 }
 
 /*
@@ -357,15 +347,15 @@ func (s *MySQLMetaStore) DeleteUser(user string) error {
 Users (get list of users)
 Not implemented
 */
-func (s *MySQLMetaStore) Users() ([]*m.User, error) {
-	return []*m.User{}, ldap.ErrUseLdap
+func (s *MySQLMetaStore) Users() ([]*meta.User, error) {
+	return []*meta.User{}, ldap.ErrUseLdap
 }
 
 /*
 Objects (get all oids)
 return meta object
 */
-func (s *MySQLMetaStore) Objects() ([]*m.Object, error) {
+func (s *MySQLMetaStore) Objects() ([]*meta.Object, error) {
 	return s.findAllOids()
 }
 
@@ -373,7 +363,7 @@ func (s *MySQLMetaStore) Objects() ([]*m.Object, error) {
 Projects (get all projects)
 return meta project object
 */
-func (s *MySQLMetaStore) Projects() ([]*m.Project, error) {
+func (s *MySQLMetaStore) Projects() ([]*meta.Project, error) {
 	return s.findAllProjects()
 }
 

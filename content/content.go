@@ -5,7 +5,7 @@ import (
 	"io"
 	"path/filepath"
 
-	m "github.com/ksurent/lfs-server-go/meta"
+	"github.com/ksurent/lfs-server-go/meta"
 )
 
 var (
@@ -14,10 +14,10 @@ var (
 )
 
 type GenericContentStore interface {
-	Get(*m.Object) (io.ReadCloser, error)
-	Put(*m.Object, io.Reader) error
-	Exists(*m.Object) bool
-	Verify(*m.Object) error
+	Get(*meta.Object) (io.ReadCloser, error)
+	Put(*meta.Object, io.Reader) error
+	Exists(*meta.Object) bool
+	Verify(*meta.Object) error
 }
 
 func TransformKey(key string) string {
