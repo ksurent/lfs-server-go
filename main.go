@@ -17,6 +17,7 @@ import (
 	m "github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
 	"github.com/ksurent/lfs-server-go/meta/cassandra"
+	"github.com/ksurent/lfs-server-go/meta/mysql"
 
 	"github.com/peterbourgon/g2g"
 )
@@ -89,11 +90,7 @@ func findMetaStore() (m.GenericMetaStore, error) {
 	case "cassandra":
 		return cassandra.NewCassandraMetaStore()
 	case "mysql":
-		db, err := NewMySQLSession()
-		if err != nil {
-			return nil, err
-		}
-		return NewMySQLMetaStore(db)
+		return mysql.NewMySQLMetaStore()
 	default:
 		return boltdb.NewMetaStore(config.Config.MetaDB)
 	}

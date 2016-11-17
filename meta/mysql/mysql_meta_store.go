@@ -1,4 +1,4 @@
-package main
+package mysql
 
 import (
 	"database/sql"
@@ -15,7 +15,11 @@ type MySQLMetaStore struct {
 	client *sql.DB
 }
 
-func NewMySQLMetaStore(db *sql.DB) (*MySQLMetaStore, error) {
+func NewMySQLMetaStore() (*MySQLMetaStore, error) {
+	db, err := NewMySQLSession()
+	if err != nil {
+		return nil, err
+	}
 	return &MySQLMetaStore{client: db}, nil
 }
 
@@ -382,6 +386,11 @@ func (s *MySQLMetaStore) authenticate(authorization string) bool {
 		return true
 	}
 
+	if !config.Config.Ldap.Enabled {
+		logger.Log("MySQL based authentication is not implemented, please use LDAP")
+		return false
+	}
+
 	if authorization == "" {
 		logger.Log("No authentication info")
 		return false
@@ -389,11 +398,6 @@ func (s *MySQLMetaStore) authenticate(authorization string) bool {
 
 	if !strings.HasPrefix(authorization, "Basic ") {
 		logger.Log("Authentication info does not look like Basic HTTP")
-		return false
-	}
-
-	if config.Config.Ldap.Enabled {
-		logger.Log("MySQL based authentication is not implemented, please use LDAP")
 		return false
 	}
 

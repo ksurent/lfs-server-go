@@ -1,6 +1,7 @@
-package main
+package mysql
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"testing"
@@ -10,7 +11,20 @@ import (
 )
 
 var (
-	metaStoreTestMySQL *MySQLMetaStore
+	metaStoreTestMySQL m.GenericMetaStore
+	testUser           = "admin"
+	testPass           = "admin"
+	testAuth           = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
+	badAuth            = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("azog:defiler")))
+	content            = "this is my content"
+	contentSize        = int64(len(content))
+	contentOid         = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
+	nonexistingOid     = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
+	noAuthcontent      = "Some content goes here"
+	noAuthContentSize  = int64(len(noAuthcontent))
+	noAuthOid          = "4609ed10888c145d228409aa5587bab9fe166093bb7c155491a96d079c9149be"
+	extraRepo          = "mytestproject"
+	testRepo           = "repo"
 )
 
 func TestMySQLConfiguration(t *testing.T) {
@@ -194,12 +208,7 @@ func setupMySQLMeta() error {
 		Database: "lfs_server_go",
 	}
 
-	db, err := NewMySQLSession()
-	if err != nil {
-		return errors.New(fmt.Sprintf("error initializing test meta store: %s\n", err))
-	}
-
-	mysqlStore, err := NewMySQLMetaStore(db)
+	mysqlStore, err := NewMySQLMetaStore()
 	if err != nil {
 		return errors.New(fmt.Sprintf("error initializing test meta store: %s\n", err))
 	}
@@ -214,11 +223,9 @@ func setupMySQLMeta() error {
 	rv := &m.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize, Repo: testRepo}
 
 	if _, err := metaStoreTestMySQL.Put(rv); err != nil {
-		fmt.Printf("error seeding mysql test meta store: %s\n", err)
 		return errors.New(fmt.Sprintf("error seeding mysql test meta store: %s\n", err))
 	}
 	if _, err := metaStoreTestMySQL.Commit(rv); err != nil {
-		fmt.Printf("error seeding mysql test meta store: %s\n", err)
 		return errors.New(fmt.Sprintf("error seeding mysql test meta store: %s\n", err))
 	}
 
