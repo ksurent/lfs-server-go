@@ -13,6 +13,7 @@ import (
 
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
+	"github.com/ksurent/lfs-server-go/content/fs"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
@@ -333,7 +334,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	testContentStore, err = NewContentStore("lfs-content-test")
+	testContentStore, err = fs.NewContentStore("lfs-content-test")
 	if err != nil {
 		fmt.Printf("Error creating content store: %s", err)
 		os.Exit(1)

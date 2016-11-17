@@ -15,6 +15,7 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/content/aws"
+	"github.com/ksurent/lfs-server-go/content/fs"
 	"github.com/ksurent/lfs-server-go/logger"
 	m "github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
@@ -103,11 +104,11 @@ func findContentStore() (content.GenericContentStore, error) {
 
 	switch config.Config.ContentStore {
 	case "filestore":
-		return NewContentStore(config.Config.ContentPath)
+		return fs.NewContentStore(config.Config.ContentPath)
 	case "aws":
 		return aws.NewAwsContentStore()
 	default:
-		return NewContentStore(config.Config.ContentPath)
+		return fs.NewContentStore(config.Config.ContentPath)
 	}
 }
 func main() {
