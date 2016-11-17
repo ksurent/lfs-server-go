@@ -125,7 +125,7 @@ func TestMySQLPutWithoutAuth(t *testing.T) {
 		Size:          42,
 		Repo:          testRepo,
 	})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
@@ -135,7 +135,7 @@ func TestMySQLPutWithoutAuth(t *testing.T) {
 		Size: 42,
 		Repo: testRepo,
 	})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -172,12 +172,12 @@ func TestMySQLGetWithoutAuth(t *testing.T) {
 	}
 
 	_, err := metaStoreTestMySQL.Get(&m.RequestVars{Authorization: badAuth, Oid: noAuthOid})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 
 	_, err = metaStoreTestMySQL.Get(&m.RequestVars{Oid: noAuthOid})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }

@@ -36,7 +36,7 @@ func TestGetWithoutAuth(t *testing.T) {
 	defer teardownMeta()
 
 	_, err := metaStoreTest.Get(&m.RequestVars{Authorization: badAuth, Oid: contentOid})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }
@@ -106,7 +106,7 @@ func TestPuthWithoutAuth(t *testing.T) {
 	defer teardownMeta()
 
 	_, err := metaStoreTest.Put(&m.RequestVars{Authorization: badAuth, Oid: contentOid, Size: 42})
-	if !isAuthError(err) {
+	if !m.IsAuthError(err) {
 		t.Errorf("expected auth error, got: %s", err)
 	}
 }

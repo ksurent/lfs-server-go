@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -40,19 +39,6 @@ func attributes(m interface{}) map[string]reflect.Type {
 	}
 
 	return attrs
-}
-
-func encryptPass(password []byte) (string, error) {
-	// Hashing the password with the cost of 10
-	hashedPassword, err := bcrypt.GenerateFromPassword(password, 10)
-	return string(hashedPassword), err
-}
-
-func checkPass(hashedPassword, password []byte) (bool, error) {
-	// Comparing the password with the hash
-	err := bcrypt.CompareHashAndPassword(hashedPassword, password)
-	// no error means success
-	return (err == nil), nil
 }
 
 // cloneRequest returns a clone of the provided *http.Request. The clone is a

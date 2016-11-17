@@ -194,7 +194,7 @@ func (s *MySQLMetaStore) findOid(oid string, pending bool) (*m.Object, error) {
 	}
 
 	if meta.Oid == "" {
-		return nil, errObjectNotFound
+		return nil, m.ErrObjectNotFound
 	}
 
 	rows, err := s.client.Query(`

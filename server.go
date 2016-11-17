@@ -95,7 +95,7 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 	if err != nil {
 		logger.Log(err)
 
-		if isAuthError(err) {
+		if m.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -121,7 +121,7 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) int {
 	if err != nil {
 		logger.Log(err)
 
-		if isAuthError(err) {
+		if m.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -137,7 +137,7 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 	if err != nil {
 		logger.Log(err)
 
-		if isAuthError(err) {
+		if m.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -160,7 +160,7 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	if err != nil {
 		logger.Log(err)
 
-		if isAuthError(err) {
+		if m.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -197,7 +197,7 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 		if err != nil {
 			logger.Log(err)
 
-			if isAuthError(err) {
+			if m.IsAuthError(err) {
 				return requireAuth(w, r)
 			}
 
@@ -235,7 +235,7 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	if err != nil {
 		logger.Log(err)
 
-		if isAuthError(err) {
+		if m.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -265,7 +265,7 @@ func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) int {
 	if err != nil {
 		logger.Log(err)
 
-		if isAuthError(err) {
+		if m.IsAuthError(err) {
 			return requireAuth(w, r)
 		}
 		return notFound(w, r)
@@ -408,16 +408,6 @@ func writeStatus(w http.ResponseWriter, r *http.Request, status int) {
 
 	w.WriteHeader(status)
 	fmt.Fprint(w, message)
-}
-
-func isAuthError(err error) bool {
-	type autherror interface {
-		AuthError() bool
-	}
-	if ae, ok := err.(autherror); ok {
-		return ae.AuthError()
-	}
-	return false
 }
 
 func notFound(w http.ResponseWriter, r *http.Request) int {

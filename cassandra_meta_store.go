@@ -93,7 +93,7 @@ func (self *CassandraMetaStore) removeProject(projectName string) error {
 
 func (self *CassandraMetaStore) findProject(projectName string) (*m.Project, error) {
 	if projectName == "" {
-		return nil, errProjectNotFound
+		return nil, m.ErrProjectNotFound
 	}
 	q := self.client.Query("select * from projects where name = ?", projectName)
 	b := cqlr.BindQuery(q)
@@ -101,7 +101,7 @@ func (self *CassandraMetaStore) findProject(projectName string) (*m.Project, err
 	b.Scan(&ct)
 	defer b.Close()
 	if ct.Name == "" {
-		return nil, errProjectNotFound
+		return nil, m.ErrProjectNotFound
 	}
 	return &ct, nil
 }
@@ -137,7 +137,7 @@ func (self *CassandraMetaStore) doFindOid(oid, table string) (*m.Object, error) 
 	b.Scan(&meta)
 
 	if meta.Oid == "" {
-		return nil, errObjectNotFound
+		return nil, m.ErrObjectNotFound
 	}
 
 	itr := self.cassandraService.Client.Query("select name from projects where oids contains ?", oid).Iter()
@@ -180,7 +180,7 @@ func (self *CassandraMetaStore) findAllProjects() ([]*m.Project, error) {
 	}
 	itr.Close()
 	if len(project_list) == 0 {
-		return nil, errProjectNotFound
+		return nil, m.ErrProjectNotFound
 	}
 	return project_list, nil
 }
@@ -284,7 +284,7 @@ func (self *CassandraMetaStore) Get(v *m.RequestVars) (*m.Object, error) {
 	if err != nil {
 		return nil, err
 	} else if !meta.Existing {
-		return nil, errObjectNotFound
+		return nil, m.ErrObjectNotFound
 	}
 
 	return meta, nil
@@ -316,7 +316,7 @@ func (self *CassandraMetaStore) doGet(v *m.RequestVars) (*m.Object, error) {
 		return meta, nil
 	}
 
-	return nil, errObjectNotFound
+	return nil, m.ErrObjectNotFound
 }
 
 /*
@@ -329,7 +329,7 @@ func (self *CassandraMetaStore) findUser(user string) (*m.User, error) {
 	b := cqlr.BindQuery(q)
 	b.Scan(&mu)
 	if mu.Name == "" {
-		return nil, errUserNotFound
+		return nil, m.ErrUserNotFound
 	}
 	return &mu, nil
 }
@@ -346,7 +346,7 @@ func (self *CassandraMetaStore) AddUser(user, pass string) error {
 	if uErr == nil {
 		return nil
 	}
-	encryptedPass, err := encryptPass([]byte(pass))
+	encryptedPass, err := m.EncryptPass([]byte(pass))
 	if err != nil {
 		return err
 	}
@@ -444,7 +444,7 @@ func (self *CassandraMetaStore) authenticate(authorization string) bool {
 		return false
 	}
 
-	match, err := checkPass([]byte(mu.Password), []byte(password))
+	match, err := m.CheckPass([]byte(mu.Password), []byte(password))
 	if err != nil {
 		logger.Log(err)
 	}
