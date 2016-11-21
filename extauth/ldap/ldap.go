@@ -124,15 +124,3 @@ func findUserDn(user string) (string, error) {
 	}
 	return "", errLdapUserNotFound
 }
-
-type authError struct {
-	error
-}
-
-func (e authError) AuthError() bool {
-	return true
-}
-
-func newAuthError() error {
-	return authError{errors.New("Forbidden")}
-}
