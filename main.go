@@ -46,6 +46,8 @@ var (
 var graphite *g2g.Graphite
 
 func findMetaStore() (meta.GenericMetaStore, error) {
+	logger.Log("Meta store: " + config.Config.BackingStore)
+
 	switch config.Config.BackingStore {
 	case "bolt":
 		return boltdb.NewMetaStore(config.Config.MetaDB)
@@ -59,7 +61,7 @@ func findMetaStore() (meta.GenericMetaStore, error) {
 }
 
 func findContentStore() (content.GenericContentStore, error) {
-	logger.Log("Using content store " + config.Config.ContentStore)
+	logger.Log("Content store: " + config.Config.ContentStore)
 
 	switch config.Config.ContentStore {
 	case "filestore":
