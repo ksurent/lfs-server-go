@@ -2,6 +2,7 @@ package main
 
 import (
 	"expvar"
+	"flag"
 	"fmt"
 	"os"
 	"runtime"
@@ -18,6 +19,7 @@ import (
 	"github.com/ksurent/lfs-server-go/meta/cassandra"
 	"github.com/ksurent/lfs-server-go/meta/mysql"
 
+	"github.com/facebookgo/pidfile"
 	"github.com/peterbourgon/g2g"
 )
 
@@ -69,7 +71,11 @@ func findContentStore() (content.GenericContentStore, error) {
 	}
 }
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "-v" {
+	showVersion := flag.Bool("version", false, "Print version and exit.")
+
+	flag.Parse()
+
+	if *showVersion {
 		fmt.Println(BuildVersion)
 		os.Exit(0)
 	}
@@ -126,6 +132,9 @@ func main() {
 
 	expvarVersion.Set(BuildVersion)
 
+	if err := pidfile.Write(); err != nil && !pidfile.IsNotConfigured(err) {
+		logger.Fatal(err)
+	}
 
 	app := NewApp(contentStore, metaStore)
 	err = app.Serve()
