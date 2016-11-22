@@ -2,19 +2,21 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/json"
 	"expvar"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/logger"
 	"github.com/ksurent/lfs-server-go/meta"
 
+	"github.com/facebookgo/grace/gracehttp"
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
 )
@@ -77,9 +79,30 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go totalRequests.Add(1)
 }
 
-// Serve calls http.Serve with the provided Listener and the app's router
-func (a *App) Serve(l net.Listener) error {
-	return http.Serve(l, a)
+func (a *App) Serve() error {
+	srv := &http.Server{
+		Addr:    config.Config.Listen,
+		Handler: a,
+	}
+
+	if config.Config.UseTLS() {
+		logger.Log("Using TLS")
+
+		tlsCfg := &tls.Config{
+			NextProtos:   []string{"http/1.1"},
+			Certificates: make([]tls.Certificate, 1),
+		}
+
+		if pair, err := tls.LoadX509KeyPair(config.Config.Cert, config.Config.Key); err == nil {
+			tlsCfg.Certificates[0] = pair
+		} else {
+			logger.Fatal(err)
+		}
+
+		srv.TLSConfig = tlsCfg
+	}
+
+	return gracehttp.Serve(srv)
 }
 
 // GetContentHandler gets the content from the content store

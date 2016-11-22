@@ -1,15 +1,11 @@
 package main
 
 import (
-	"crypto/tls"
 	"expvar"
 	"fmt"
-	"net"
 	"os"
-	"os/signal"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ksurent/lfs-server-go/config"
@@ -45,46 +41,7 @@ var (
 	expvarVersion = expvar.NewString("BuildVersion")
 )
 
-// tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
-// connections. It's used by ListenAndServe and ListenAndServeTLS so
-// dead TCP connections (e.g. closing laptop mid-download) eventually
-// go away.
-type tcpKeepAliveListener struct {
-	*net.TCPListener
-}
-
 var graphite *g2g.Graphite
-
-func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
-	tc, err := ln.AcceptTCP()
-	if err != nil {
-		return
-	}
-	tc.SetKeepAlive(true)
-	tc.SetKeepAlivePeriod(3 * time.Minute)
-	return tc, nil
-}
-
-func wrapHttps(l net.Listener, cert, key string) (net.Listener, error) {
-	var err error
-
-	config := &tls.Config{}
-
-	if config.NextProtos == nil {
-		config.NextProtos = []string{"http/1.1"}
-	}
-
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(cert, key)
-	if err != nil {
-		return nil, err
-	}
-
-	netListener := l.(*TrackingListener).Listener
-
-	tlsListener := tls.NewListener(tcpKeepAliveListener{netListener.(*net.TCPListener)}, config)
-	return tlsListener, nil
-}
 
 func findMetaStore() (meta.GenericMetaStore, error) {
 	switch config.Config.BackingStore {
@@ -117,26 +74,10 @@ func main() {
 		os.Exit(0)
 	}
 
-	var listener net.Listener
 	runtime.GOMAXPROCS(config.Config.NumProcs)
 
-	tl, err := NewTrackingListener(config.Config.Listen)
-	if err != nil {
-		logger.Fatal("Could not create listener: " + err.Error())
-	}
-
-	listener = tl
-
 	if config.Config.IsHTTPS() {
-		if config.Config.UseTLS() {
-			logger.Log("Using TLS")
-			listener, err = wrapHttps(tl, config.Config.Cert, config.Config.Key)
-			if err != nil {
-				logger.Fatal("Could not create https listener: " + err.Error())
-			}
-		} else {
-			logger.Log("Will generate https hrefs")
-		}
+		logger.Log("Will generate https hrefs")
 	}
 
 	metaStore, err := findMetaStore()
@@ -148,18 +89,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Could not open the content store: " + err.Error())
 	}
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGHUP)
-	go func(c chan os.Signal, listener net.Listener) {
-		for {
-			sig := <-c
-			switch sig {
-			case syscall.SIGHUP: // Graceful shutdown
-				tl.Close()
-			}
-		}
-	}(c, tl)
 
 	if config.Config.Graphite.Enabled {
 		graphite = g2g.NewGraphite(
@@ -189,23 +118,19 @@ func main() {
 
 		logger.Log("Graphite metrics prefix is " + prefix)
 		logger.Log("Sending metrics to " + config.Config.Graphite.Endpoint)
+
+		defer graphite.Shutdown()
 	}
 
-	logger.Log(fmt.Sprintf(
-		"Listening on %s: PID=%d version=%s",
-		config.Config.Listen,
-		os.Getpid(),
-		BuildVersion,
-	))
+	logger.Log("Version: " + BuildVersion)
 
 	expvarVersion.Set(BuildVersion)
 
-	app := NewApp(contentStore, metaStore)
-	app.Serve(listener)
-	tl.WaitForChildren()
 
-	if config.Config.Graphite.Enabled {
-		graphite.Shutdown()
+	app := NewApp(contentStore, metaStore)
+	err = app.Serve()
+	if err != nil {
+		logger.Fatal(err)
 	}
 }
 
