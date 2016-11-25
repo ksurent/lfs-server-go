@@ -1,14 +1,9 @@
 package cassandra
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"strings"
 
-	"github.com/ksurent/lfs-server-go/config"
-	"github.com/ksurent/lfs-server-go/extauth/ldap"
-	"github.com/ksurent/lfs-server-go/logger"
 	"github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/gocql/gocql"
@@ -194,10 +189,6 @@ func (self *CassandraMetaStore) findAllProjects() ([]*meta.Project, error) {
 // Put() creates uncommitted objects from meta.RequestVars and stores them in the
 // meta store
 func (self *CassandraMetaStore) Put(v *meta.RequestVars) (*meta.Object, error) {
-	if !self.authenticate(v.Authorization) {
-		return nil, meta.ErrNotAuthenticated
-	}
-
 	// Don't care here if it's pending or committed
 	if m, err := self.doGet(v); err == nil {
 		return m, nil
@@ -221,10 +212,6 @@ func (self *CassandraMetaStore) Put(v *meta.RequestVars) (*meta.Object, error) {
 // Commit() finds uncommitted objects in the meta store using data in
 // meta.RequestVars and commits them
 func (self *CassandraMetaStore) Commit(v *meta.RequestVars) (*meta.Object, error) {
-	if !self.authenticate(v.Authorization) {
-		return nil, meta.ErrNotAuthenticated
-	}
-
 	m, err := self.GetPending(v)
 	if err != nil {
 		return nil, err
@@ -282,10 +269,6 @@ func (self *CassandraMetaStore) doPut(m *meta.Object) error {
 // Get() retrieves meta information for a committed object given information in
 // meta.RequestVars
 func (self *CassandraMetaStore) Get(v *meta.RequestVars) (*meta.Object, error) {
-	if !self.authenticate(v.Authorization) {
-		return nil, meta.ErrNotAuthenticated
-	}
-
 	m, err := self.doGet(v)
 	if err != nil {
 		return nil, err
@@ -298,10 +281,6 @@ func (self *CassandraMetaStore) Get(v *meta.RequestVars) (*meta.Object, error) {
 
 // Same as Get() but for uncommitted objects
 func (self *CassandraMetaStore) GetPending(v *meta.RequestVars) (*meta.Object, error) {
-	if !self.authenticate(v.Authorization) {
-		return nil, meta.ErrNotAuthenticated
-	}
-
 	m, err := self.doGet(v)
 	if err != nil {
 		return nil, err
@@ -341,12 +320,9 @@ func (self *CassandraMetaStore) findUser(user string) (*meta.User, error) {
 }
 
 /*
-Adds a user to the system, only for use when not using ldap
+Adds a user to the system
 */
 func (self *CassandraMetaStore) AddUser(user, pass string) error {
-	if config.Config.Ldap.Enabled {
-		return ldap.ErrUseLdap
-	}
 	_, uErr := self.findUser(user)
 	// return nil if the user is already there
 	if uErr == nil {
@@ -361,23 +337,17 @@ func (self *CassandraMetaStore) AddUser(user, pass string) error {
 }
 
 /*
-Removes a user from the system, only for use when not using ldap
+Removes a user from the system
 Usage: DeleteUser("testuser")
 */
 func (self *CassandraMetaStore) DeleteUser(user string) error {
-	if config.Config.Ldap.Enabled {
-		return ldap.ErrUseLdap
-	}
 	return self.client.Query("delete from users where username = ?", user).Exec()
 }
 
 /*
-returns all users, only for use when not using ldap
+returns all users
 */
 func (self *CassandraMetaStore) Users() ([]*meta.User, error) {
-	if config.Config.Ldap.Enabled {
-		return []*meta.User{}, ldap.ErrUseLdap
-	}
 	var mu meta.User
 	users := make([]*meta.User, 0)
 	q := self.client.Query("select username from users")
@@ -404,55 +374,20 @@ func (self *CassandraMetaStore) Projects() ([]*meta.Project, error) {
 
 /*
 AddProject (create a new project using POST)
-Only implemented on MySQL meta store
 */
 func (self *CassandraMetaStore) AddProject(name string) error {
-	return errUnsupported
+	return self.createProject(name)
 }
 
 /*
 Auth routine.  Requires an auth string like
 "Basic YWRtaW46YWRtaW4="
 */
-func (self *CassandraMetaStore) authenticate(authorization string) bool {
-	if config.Config.IsPublic() {
-		return true
-	}
-
-	if authorization == "" {
-		logger.Log("No authentication info")
-		return false
-	}
-
-	if !strings.HasPrefix(authorization, "Basic ") {
-		logger.Log("Authentication info does not look like Basic HTTP")
-		return false
-	}
-
-	c, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(authorization, "Basic "))
-	if err != nil {
-		logger.Log(err)
-		return false
-	}
-	cs := string(c)
-	i := strings.IndexByte(cs, ':')
-	if i < 0 {
-		return false
-	}
-	user, password := cs[:i], cs[i+1:]
-
-	if config.Config.Ldap.Enabled {
-		return ldap.AuthenticateLdap(user, password)
-	}
+func (self *CassandraMetaStore) Authenticate(user, pass string) (bool, error) {
 	mu, err := self.findUser(user)
 	if err != nil {
-		logger.Log(err)
-		return false
+		return false, err
 	}
 
-	match, err := meta.CheckPass([]byte(mu.Password), []byte(password))
-	if err != nil {
-		logger.Log(err)
-	}
-	return match
+	return meta.CheckPass([]byte(mu.Password), []byte(pass))
 }

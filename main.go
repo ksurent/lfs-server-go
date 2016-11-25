@@ -146,8 +146,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	app := NewApp(contentStore, metaStore)
-	err = app.Serve()
+	err = NewApp(contentStore, metaStore).Serve()
 	if err != nil {
 		logger.Fatal(err)
 	}

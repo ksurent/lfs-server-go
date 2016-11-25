@@ -13,6 +13,7 @@ import (
 
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
+	"github.com/ksurent/lfs-server-go/extauth/ldap"
 	"github.com/ksurent/lfs-server-go/logger"
 	"github.com/ksurent/lfs-server-go/meta"
 
@@ -68,6 +69,19 @@ func NewApp(c content.GenericContentStore, m meta.GenericMetaStore) *App {
 }
 
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !config.Config.IsPublic() {
+		ok, err := a.authenticate(r)
+		if err != nil {
+			logger.Log(err)
+			writeStatus(w, r, http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			requireAuth(w, r)
+			return
+		}
+	}
+
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err == nil {
@@ -111,17 +125,12 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 	m, err := a.metaStore.Get(rv)
 	if err != nil {
 		logger.Log(err)
-
-		if meta.IsAuthError(err) {
-			return requireAuth(w, r)
-		}
 		return notFound(w, r)
 	}
 
 	reader, err := a.contentStore.Get(m)
 	if err != nil {
 		logger.Log(err)
-
 		return notFound(w, r)
 	}
 	defer reader.Close()
@@ -137,10 +146,6 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) int {
 	_, err := a.metaStore.Get(rv)
 	if err != nil {
 		logger.Log(err)
-
-		if meta.IsAuthError(err) {
-			return requireAuth(w, r)
-		}
 		return notFound(w, r)
 	}
 
@@ -153,10 +158,6 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 	m, err := a.metaStore.Get(rv)
 	if err != nil {
 		logger.Log(err)
-
-		if meta.IsAuthError(err) {
-			return requireAuth(w, r)
-		}
 		return notFound(w, r)
 	}
 
@@ -176,10 +177,6 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	m, err := a.metaStore.Put(rv)
 	if err != nil {
 		logger.Log(err)
-
-		if meta.IsAuthError(err) {
-			return requireAuth(w, r)
-		}
 		return notFound(w, r)
 	}
 
@@ -213,11 +210,6 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 		m, err := a.metaStore.Put(object)
 		if err != nil {
 			logger.Log(err)
-
-			if meta.IsAuthError(err) {
-				return requireAuth(w, r)
-			}
-
 			continue
 		}
 
@@ -251,10 +243,6 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	m, err := a.metaStore.GetPending(rv)
 	if err != nil {
 		logger.Log(err)
-
-		if meta.IsAuthError(err) {
-			return requireAuth(w, r)
-		}
 		return notFound(w, r)
 	}
 
@@ -281,10 +269,6 @@ func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) int {
 	m, err := a.metaStore.Get(rv)
 	if err != nil {
 		logger.Log(err)
-
-		if meta.IsAuthError(err) {
-			return requireAuth(w, r)
-		}
 		return notFound(w, r)
 	}
 
@@ -341,6 +325,20 @@ func (a *App) Represent(rv *meta.RequestVars, m *meta.Object, download, upload, 
 	}
 
 	return rep
+}
+
+func (a *App) authenticate(r *http.Request) (bool, error) {
+	user, pass, ok := r.BasicAuth()
+
+	if !ok {
+		return false, nil
+	}
+
+	if config.Config.Ldap.Enabled {
+		return ldap.AuthenticateLdap(user, pass)
+	}
+
+	return a.metaStore.Authenticate(user, pass)
 }
 
 // ContentMatcher provides a mux.MatcherFunc that only allows requests that contain

@@ -33,7 +33,7 @@ func TestNewLdapConnection(t *testing.T) {
 		t.Errorf("Errored trying to connect to ldap, %s", err.Error())
 	}
 
-	lbind := LdapBind(testUser, testPass)
+	lbind, _ := LdapBind(testUser, testPass)
 	if !lbind {
 		t.Errorf("Failed to bind as %s", testUser)
 	}
@@ -43,12 +43,12 @@ func TestLdapBind(t *testing.T) {
 	setupMetaAuth()
 	defer tearDownMetaAuth()
 
-	lbind := LdapBind(testUser, testPass)
+	lbind, _ := LdapBind(testUser, testPass)
 	if !lbind {
 		t.Errorf("Failed to bind as %s", testUser)
 	}
 
-	lbind = LdapBind(testUser, "badpass")
+	lbind, _ = LdapBind(testUser, "badpass")
 	if lbind {
 		t.Errorf("Bound as %s but it should have failed", testUser)
 	}

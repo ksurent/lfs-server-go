@@ -1,7 +1,6 @@
 package boltdb
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"testing"
@@ -11,27 +10,19 @@ import (
 )
 
 var (
-	metaStoreTest     meta.GenericMetaStore
-	testUser          = "admin"
-	testPass          = "admin"
-	testAuth          = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
-	badAuth           = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("azog:defiler")))
-	content           = "this is my content"
-	contentSize       = int64(len(content))
-	contentOid        = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
-	nonexistingOid    = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
-	noAuthcontent     = "Some content goes here"
-	noAuthContentSize = int64(len(noAuthcontent))
-	noAuthOid         = "4609ed10888c145d228409aa5587bab9fe166093bb7c155491a96d079c9149be"
-	extraRepo         = "mytestproject"
-	testRepo          = "repo"
+	metaStoreTest  meta.GenericMetaStore
+	testUser       = "admin"
+	testPass       = "admin"
+	contentSize    = int64(len("this is my content"))
+	contentOid     = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
+	nonexistingOid = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
 )
 
-func TestGetWithAuth(t *testing.T) {
+func TestGet(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	m, err := metaStoreTest.Get(&meta.RequestVars{Authorization: testAuth, Oid: contentOid})
+	m, err := metaStoreTest.Get(&meta.RequestVars{Oid: contentOid})
 	if err != nil {
 		t.Fatalf("Error retreiving meta: %s", err)
 	}
@@ -45,23 +36,13 @@ func TestGetWithAuth(t *testing.T) {
 	}
 }
 
-func TestGetWithoutAuth(t *testing.T) {
+func TestPut(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	_, err := metaStoreTest.Get(&meta.RequestVars{Authorization: badAuth, Oid: contentOid})
-	if !meta.IsAuthError(err) {
-		t.Errorf("expected auth error, got: %s", err)
-	}
-}
+	getRv := &meta.RequestVars{Oid: nonexistingOid}
 
-func TestPutWithAuth(t *testing.T) {
-	setupMeta()
-	defer teardownMeta()
-
-	getRv := &meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid}
-
-	putRv := &meta.RequestVars{Authorization: testAuth, Oid: nonexistingOid, Size: 42}
+	putRv := &meta.RequestVars{Oid: nonexistingOid, Size: 42}
 
 	m, err := metaStoreTest.Put(putRv)
 	if err != nil {
@@ -115,13 +96,18 @@ func TestPutWithAuth(t *testing.T) {
 	}
 }
 
-func TestPuthWithoutAuth(t *testing.T) {
+func TestAuthenticate(t *testing.T) {
 	setupMeta()
 	defer teardownMeta()
 
-	_, err := metaStoreTest.Put(&meta.RequestVars{Authorization: badAuth, Oid: contentOid, Size: 42})
-	if !meta.IsAuthError(err) {
-		t.Errorf("expected auth error, got: %s", err)
+	ok, _ := metaStoreTest.Authenticate(testUser, testPass)
+	if !ok {
+		t.Errorf("expected auth to succeed")
+	}
+
+	ok, _ = metaStoreTest.Authenticate("azog", "defiler")
+	if ok {
+		t.Errorf("expected auth to fail")
 	}
 }
 
@@ -140,7 +126,7 @@ func setupMeta() {
 		os.Exit(1)
 	}
 
-	rv := &meta.RequestVars{Authorization: testAuth, Oid: contentOid, Size: contentSize}
+	rv := &meta.RequestVars{Oid: contentOid, Size: contentSize}
 
 	if _, err := metaStoreTest.Put(rv); err != nil {
 		teardownMeta()

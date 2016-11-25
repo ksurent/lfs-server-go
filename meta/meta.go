@@ -43,4 +43,5 @@ type GenericMetaStore interface {
 	Users() ([]*User, error)
 	Objects() ([]*Object, error)
 	Projects() ([]*Project, error)
+	Authenticate(string, string) (bool, error)
 }
