@@ -63,7 +63,24 @@ func (s *MySQLMetaStore) findAllOids() ([]*meta.Object, error) {
 
 // Find committed oids for a project id
 func (s *MySQLMetaStore) mapOid(id int) ([]string, error) {
-	rows, err := s.client.Query("select oid from oid_maps where projectID = ? and pending = 0", id)
+	rows, err := s.client.Query(`
+		select
+			m.oid
+		from
+			oid_maps m
+		join
+			oids o
+		on
+			o.oid = m.oid
+		join
+			projects p
+		on
+			p.id = m.projectID
+		where
+			m.projectID = ?
+			and o.pending = 0
+			and p.pending = 0
+	`, id)
 	if err != nil {
 		return nil, err
 	}
