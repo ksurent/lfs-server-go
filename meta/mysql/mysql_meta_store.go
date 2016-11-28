@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/ksurent/lfs-server-go/logger"
 	"github.com/ksurent/lfs-server-go/meta"
 )
 
@@ -33,7 +32,6 @@ func (s *MySQLMetaStore) Close() {
 func (s *MySQLMetaStore) findAllOids() ([]*meta.Object, error) {
 	rows, err := s.client.Query("select oid, size from oids where pending = 0")
 	if err != nil {
-		logger.Log(err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -47,6 +45,9 @@ func (s *MySQLMetaStore) findAllOids() ([]*meta.Object, error) {
 	for rows.Next() {
 		err := rows.Scan(&oid, &size)
 		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, meta.ErrObjectNotFound
+			}
 			return nil, err
 		}
 		oidList = append(oidList, &meta.Object{Oid: oid, Size: size})
@@ -76,6 +77,9 @@ func (s *MySQLMetaStore) mapOid(id int) ([]string, error) {
 	for rows.Next() {
 		err := rows.Scan(&oid)
 		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, meta.ErrObjectNotFound
+			}
 			return nil, err
 		}
 		oidList = append(oidList, oid)
@@ -106,6 +110,9 @@ func (s *MySQLMetaStore) findAllProjects() ([]*meta.Project, error) {
 	for rows.Next() {
 		err := rows.Scan(&id, &name)
 		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, meta.ErrObjectNotFound
+			}
 			return nil, err
 		}
 
@@ -193,6 +200,9 @@ func (s *MySQLMetaStore) findOid(oid string, pending bool) (*meta.Object, error)
 			and pending = ?
 	`, oid, n).Scan(&m.Oid, &m.Size)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, meta.ErrObjectNotFound
+		}
 		return nil, err
 	}
 
@@ -222,6 +232,9 @@ func (s *MySQLMetaStore) findOid(oid string, pending bool) (*meta.Object, error)
 	for rows.Next() {
 		err := rows.Scan(&name)
 		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, meta.ErrObjectNotFound
+			}
 			return nil, err
 		}
 
