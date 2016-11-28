@@ -4,8 +4,21 @@ import (
 	"errors"
 )
 
+type notFound struct {
+	text string
+}
+
+func (e *notFound) Error() string {
+	return e.text
+}
+
+func IsObjectNotFound(err error) bool {
+	_, ok := err.(*notFound)
+	return ok
+}
+
 var (
-	ErrObjectNotFound  = errors.New("Object not found")
+	ErrObjectNotFound  = &notFound{"Object not found"}
 	ErrProjectNotFound = errors.New("Project not found")
 	ErrUserNotFound    = errors.New("Unable to find user")
 )
