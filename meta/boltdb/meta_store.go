@@ -69,7 +69,14 @@ func (s *MetaStore) Get(rv *meta.RequestVars) (*meta.Object, error) {
 
 // Same as Get() but for uncommitted objects
 func (s *MetaStore) GetPending(rv *meta.RequestVars) (*meta.Object, error) {
-	return s.doGet(rv)
+	m, err := s.doGet(rv)
+	if err != nil {
+		return nil, err
+	} else if m.Existing {
+		return nil, meta.ErrObjectNotFound
+	}
+
+	return m, nil
 }
 
 func (s *MetaStore) doGet(rv *meta.RequestVars) (*meta.Object, error) {
