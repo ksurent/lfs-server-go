@@ -58,8 +58,8 @@ type GraphiteConfig struct {
 	Prefix         string `json:"prefix"`
 	AppendHostname bool   `json:"append_hostname"`
 	Enabled        bool   `json:"enabled"`
-	IntervalS      int    `json:"interval_seconds"`
-	TimeoutMs      int    `json:"timeout_milliseconds"`
+	Interval       string `json:"interval"`
+	Timeout        string `json:"timeout"`
 }
 
 // Configuration holds application configuration. Values will be pulled from
@@ -170,8 +170,8 @@ func init() {
 		Endpoint:       "tcp://localhost:2003",
 		Prefix:         "",
 		AppendHostname: false,
-		IntervalS:      60,
-		TimeoutMs:      2000,
+		Interval:       "60s",
+		Timeout:        "2s",
 		Enabled:        false,
 	}
 	configuration := &Configuration{

@@ -99,11 +99,19 @@ func main() {
 	}
 
 	if config.Config.Graphite.Enabled {
-		graphite = g2g.NewGraphite(
-			config.Config.Graphite.Endpoint,
-			time.Duration(config.Config.Graphite.IntervalS)*time.Second,
-			time.Duration(config.Config.Graphite.TimeoutMs)*time.Millisecond,
-		)
+		interval, err := time.ParseDuration(config.Config.Graphite.Interval)
+		if err != nil {
+			logger.Log("Failed to parse Graphite interval (" + err.Error() + "), defaulting to 60 seconds")
+			interval = 60 * time.Second
+		}
+
+		timeout, err := time.ParseDuration(config.Config.Graphite.Timeout)
+		if err != nil {
+			logger.Log("Failed to parse Graphite timeout (" + err.Error() + "), defaulting to 2 seconds")
+			timeout = 2 * time.Second
+		}
+
+		graphite = g2g.NewGraphite(config.Config.Graphite.Endpoint, interval, timeout)
 
 		prefix := strings.Trim(config.Config.Graphite.Prefix, ".")
 
