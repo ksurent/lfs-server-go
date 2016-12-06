@@ -13,7 +13,7 @@ var (
 // MetaObject is object metadata as seen by the object and metadata stores.
 type Object struct {
 	Oid          string   `json:"oid" cql:"oid"`
-	Size         int64    `json:"size "cql:"size"`
+	Size         int64    `json:"size" cql:"size"`
 	ProjectNames []string `json:"project_names"`
 	Existing     bool
 }
