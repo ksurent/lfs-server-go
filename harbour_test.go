@@ -233,6 +233,8 @@ func TestPostUnauthed(t *testing.T) {
 }
 
 func TestPut(t *testing.T) {
+	// XXX this test is currently broken
+
 	req, err := http.NewRequest("PUT", lfsServer.URL+"/namespace/repo/objects/"+contentOid, nil)
 	if err != nil {
 		t.Fatalf("request error: %s", err)
@@ -325,16 +327,18 @@ func baseURL() string {
 }
 
 func TestMain(m *testing.M) {
-	os.Remove("lfs-test.db")
+	os.Remove("/tmp/lfs-server-go.db")
+	os.RemoveAll("/tmp/lfs-server-go-test")
+
 	config.Config.Ldap.Enabled = false
 	var err error
-	testMetaStore, err = boltdb.NewMetaStore(config.Config.MetaDB)
+	testMetaStore, err = boltdb.NewMetaStore("/tmp/lfs-server-go.db")
 	if err != nil {
 		fmt.Printf("Error creating meta store: %s", err)
 		os.Exit(1)
 	}
 
-	testContentStore, err = fs.NewContentStore("lfs-content-test")
+	testContentStore, err = fs.NewContentStore("/tmp/lfs-server-go-test")
 	if err != nil {
 		fmt.Printf("Error creating content store: %s", err)
 		os.Exit(1)
@@ -359,8 +363,6 @@ func TestMain(m *testing.M) {
 
 	lfsServer.Close()
 	testMetaStore.Close()
-	os.Remove("lfs-test.db")
-	os.RemoveAll("lfs-content-test")
 	os.Exit(ret)
 
 }
