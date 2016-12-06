@@ -61,7 +61,7 @@ func NewCassandraSession() (*CassandraService, error) {
 
 func initializeCassandra(session *gocql.Session) error {
 	// projects table
-	q := fmt.Sprintf("create table if not exists projects (name text PRIMARY KEY, oids SET<text>);")
+	q := fmt.Sprintf("create table if not exists projects (name text PRIMARY KEY, oids SET<text>, pending boolean);")
 	err := session.Query(q).Exec()
 	if err != nil {
 		return err
@@ -75,14 +75,7 @@ func initializeCassandra(session *gocql.Session) error {
 	}
 
 	// Oids table
-	q = fmt.Sprintf("create table if not exists oids(oid text primary key, size bigint);")
-	session.Query(q).Exec()
-	if err != nil {
-		return err
-	}
-
-	// Pending table
-	q = fmt.Sprintf("create table if not exists pending_oids(oid text primary key, size bigint);")
+	q = fmt.Sprintf(`create table if not exists oids(oid text primary key, size bigint, pending boolean);`)
 	session.Query(q).Exec()
 	if err != nil {
 		return err
@@ -91,14 +84,4 @@ func initializeCassandra(session *gocql.Session) error {
 	// user management
 	q = fmt.Sprintf("create table if not exists users(username text primary key, password text);")
 	return session.Query(q).Exec()
-}
-
-func DropCassandra(session *gocql.Session) error {
-	m := fmt.Sprintf("%s_%s", config.Config.Cassandra.Keyspace, config.GoEnv)
-	q := fmt.Sprintf("drop keyspace %s;", m)
-	sess, err := NewCassandraSession()
-	if err != nil {
-		return err
-	}
-	return sess.Client.Query(q).Exec()
 }

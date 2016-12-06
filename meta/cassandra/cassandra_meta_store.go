@@ -15,11 +15,6 @@ type CassandraMetaStore struct {
 	client           *gocql.Session
 }
 
-const (
-	CassandraPendingTable   string = "pending_oids"
-	CassandraCommittedTable        = "oids"
-)
-
 var errUnsupported = errors.New("This feature is not supported by this backend")
 
 func NewCassandraMetaStore() (*CassandraMetaStore, error) {
@@ -35,119 +30,155 @@ func NewCassandraMetaStore() (*CassandraMetaStore, error) {
 }
 
 func (self *CassandraMetaStore) Close() {
-	defer self.client.Close()
-	return
+	self.client.Close()
 }
 
-func (self *CassandraMetaStore) createProject(project string) error {
+func (self *CassandraMetaStore) createProject(project string, pending bool) error {
 	counter := make(map[string]interface{}, 1)
 	self.client.Query("select count(*) as count from projects where name = ?", project).MapScan(counter)
 	if val, ok := counter["count"].(int64); ok && val > 0 {
 		// already there
 		return nil
 	}
-	err := self.client.Query("insert into projects (name) values(?)", project).Exec()
-	return err
+	return self.client.Query("insert into projects (name, pending) values(?, ?)", project, pending).Exec()
 }
 
 func (self *CassandraMetaStore) addOidToProject(oid string, project string) error {
 	// Cannot bind on collections
 	q := fmt.Sprintf("update projects set oids = oids + {'%s'} where name = '%s'", oid, project)
-	err := self.client.Query(q).Exec()
-	return err
-}
-
-func (self *CassandraMetaStore) createPendingOid(oid string, size int64) error {
-	return self.client.Query("insert into pending_oids (oid, size) values (?, ?)", oid, size).Exec()
-}
-
-func (self *CassandraMetaStore) createOid(oid string, size int64) error {
-	return self.client.Query("insert into oids (oid, size) values (?, ?)", oid, size).Exec()
-}
-
-func (self *CassandraMetaStore) removePendingOid(oid string) error {
-	return self.client.Query("delete from pending_oids where oid = ?", oid).Exec()
-}
-
-func (self *CassandraMetaStore) removeOid(oid string) error {
-	/*
-		Oids are shared amongst projects, so this will need to find out the following:
-		1. What projects (if any) have the requested OID.
-		2. If other projects are still using the OID, then do not delete it from the main OID listing
-	*/
-	//	return self.client.Query("update projects set oids = oids - {?} where oids contains ?", oid).Exec()
-	return self.client.Query("delete from oids where oid = ?", oid).Exec()
-}
-
-func (self *CassandraMetaStore) removeOidFromProject(oid, project string) error {
-	/*
-		Oids are shared amongst projects, so this will need to find out the following:
-		1. What projects (if any) have the requested OID.
-		2. If other projects are still using the OID, then do not delete it from the main OID listing
-	*/
-	q := fmt.Sprintf("update projects set oids = oids - {'%s'} where name = '%s'", oid, project)
 	return self.client.Query(q).Exec()
 }
 
-func (self *CassandraMetaStore) removeProject(projectName string) error {
-	return self.client.Query("delete from projects where name = ?", projectName).Exec()
+func (self *CassandraMetaStore) createPendingOid(m *meta.Object) error {
+	err := self.client.Query(`
+		insert into
+			oids (oid, size, pending)
+		values
+			(?, ?, ?)
+	`, m.Oid, m.Size, true).Exec()
+	if err != nil {
+		return err
+	}
+
+	for _, name := range m.ProjectNames {
+		err := self.createProject(name, true)
+		if err != nil {
+			return err
+		}
+
+		err = self.addOidToProject(m.Oid, name)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (self *CassandraMetaStore) commitPendingOid(m *meta.Object) error {
+	err := self.client.Query(`
+		update
+			oids
+		set
+			pending = ?
+		where
+			oid = ?
+	`, false, m.Oid).Exec()
+	if err != nil {
+		return err
+	}
+
+	itr := self.cassandraService.Client.Query(`
+		select
+			name
+		from
+			projects
+		where
+			oids contains ?
+	`, m.Oid).Iter()
+
+	var project string
+	for itr.Scan(&project) {
+		err = self.client.Query(`
+			update
+				projects
+			set
+				pending = ?
+			where
+				name = ?
+		`, false, project).Exec()
+		if err != nil {
+			return err
+		}
+	}
+
+	if err = itr.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (self *CassandraMetaStore) findProject(projectName string) (*meta.Project, error) {
-	if projectName == "" {
-		return nil, meta.ErrProjectNotFound
-	}
 	q := self.client.Query("select * from projects where name = ?", projectName)
 	b := cqlr.BindQuery(q)
+
 	var ct meta.Project
 	b.Scan(&ct)
-	defer b.Close()
+
+	if err := b.Close(); err != nil {
+		return nil, err
+	}
+
 	if ct.Name == "" {
 		return nil, meta.ErrProjectNotFound
 	}
+
 	return &ct, nil
 }
 
-func (self *CassandraMetaStore) findPendingOid(oid string) (*meta.Object, error) {
-	m, err := self.doFindOid(oid, CassandraPendingTable)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Existing = false
-
-	return m, nil
-}
-
-func (self *CassandraMetaStore) findOid(oid string) (*meta.Object, error) {
-	m, err := self.doFindOid(oid, CassandraCommittedTable)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Existing = true
-
-	return m, nil
-}
-
-func (self *CassandraMetaStore) doFindOid(oid, table string) (*meta.Object, error) {
-	q := self.client.Query("select oid, size from "+table+" where oid = ? limit 1", oid)
+func (self *CassandraMetaStore) findOid(oid string, pending bool) (*meta.Object, error) {
+	q := self.client.Query(`
+		select
+			oid, size
+		from
+			oids
+		where
+			oid = ?
+			and pending = ?
+		allow filtering
+	`, oid, pending)
 	b := cqlr.BindQuery(q)
-	defer b.Close()
 
 	var m meta.Object
 	b.Scan(&m)
+
+	if err := b.Close(); err != nil {
+		return nil, err
+	}
 
 	if m.Oid == "" {
 		return nil, meta.ErrObjectNotFound
 	}
 
-	itr := self.cassandraService.Client.Query("select name from projects where oids contains ?", oid).Iter()
-	defer itr.Close()
+	m.Existing = !pending
+
+	itr := self.cassandraService.Client.Query(`
+		select
+			name
+		from
+			projects
+		where
+			oids contains ?
+	`, oid).Iter()
 
 	var project string
 	for itr.Scan(&project) {
 		m.ProjectNames = append(m.ProjectNames, project)
+	}
+
+	if err := itr.Close(); err != nil {
+		return nil, err
 	}
 
 	return &m, nil
@@ -157,14 +188,18 @@ func (self *CassandraMetaStore) doFindOid(oid, table string) (*meta.Object, erro
 Oid finder - returns a []*meta.Object
 */
 func (self *CassandraMetaStore) findAllOids() ([]*meta.Object, error) {
-	itr := self.cassandraService.Client.Query("select oid, size from oids;").Iter()
+	itr := self.cassandraService.Client.Query("select oid, size, pending from oids where pending = false;").Iter()
 	var oid string
 	var size int64
 	oid_list := make([]*meta.Object, 0)
 	for itr.Scan(&oid, &size) {
 		oid_list = append(oid_list, &meta.Object{Oid: oid, Size: size})
 	}
-	itr.Close()
+
+	if err := itr.Close(); err != nil {
+		return nil, err
+	}
+
 	return oid_list, nil
 }
 
@@ -179,7 +214,11 @@ func (self *CassandraMetaStore) findAllProjects() ([]*meta.Project, error) {
 	for itr.Scan(&name, &oids) {
 		project_list = append(project_list, &meta.Project{Name: name, Oids: oids})
 	}
-	itr.Close()
+
+	if err := itr.Close(); err != nil {
+		return nil, err
+	}
+
 	if len(project_list) == 0 {
 		return nil, meta.ErrProjectNotFound
 	}
@@ -190,7 +229,11 @@ func (self *CassandraMetaStore) findAllProjects() ([]*meta.Project, error) {
 // meta store
 func (self *CassandraMetaStore) Put(v *meta.RequestVars) (*meta.Object, error) {
 	// Don't care here if it's pending or committed
-	if m, err := self.doGet(v); err == nil {
+	// TODO one query
+	if m, err := self.findOid(v.Oid, false); err == nil {
+		return m, nil
+	}
+	if m, err := self.findOid(v.Oid, true); err == nil {
 		return m, nil
 	}
 
@@ -228,80 +271,26 @@ func (self *CassandraMetaStore) Commit(v *meta.RequestVars) (*meta.Object, error
 }
 
 func (self *CassandraMetaStore) doPut(m *meta.Object) error {
-
 	if !m.Existing {
-		// Creating pending object
-
-		if err := self.createPendingOid(m.Oid, m.Size); err != nil {
+		if err := self.createPendingOid(m); err != nil {
 			return err
 		}
 
 		return nil
 	}
 
-	// Committing pending object
-
-	if err := self.removePendingOid(m.Oid); err != nil {
-		return err
-	}
-
-	// TODO transform this into a logged batch
-
-	if err := self.createOid(m.Oid, m.Size); err != nil {
-		return err
-	}
-
-	for _, project := range m.ProjectNames {
-		// XXX pending projects?
-
-		if err := self.createProject(project); err != nil {
-			return err
-		}
-
-		if err := self.addOidToProject(m.Oid, project); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return self.commitPendingOid(m)
 }
 
 // Get() retrieves meta information for a committed object given information in
 // meta.RequestVars
 func (self *CassandraMetaStore) Get(v *meta.RequestVars) (*meta.Object, error) {
-	m, err := self.doGet(v)
-	if err != nil {
-		return nil, err
-	} else if !m.Existing {
-		return nil, meta.ErrObjectNotFound
-	}
-
-	return m, nil
+	return self.findOid(v.Oid, false)
 }
 
 // Same as Get() but for uncommitted objects
 func (self *CassandraMetaStore) GetPending(v *meta.RequestVars) (*meta.Object, error) {
-	m, err := self.doGet(v)
-	if err != nil {
-		return nil, err
-	}
-
-	return m, nil
-}
-
-func (self *CassandraMetaStore) doGet(v *meta.RequestVars) (*meta.Object, error) {
-
-	if m, err := self.findOid(v.Oid); err == nil {
-		m.Existing = true
-		return m, nil
-	}
-
-	if m, err := self.findPendingOid(v.Oid); err == nil {
-		m.Existing = false
-		return m, nil
-	}
-
-	return nil, meta.ErrObjectNotFound
+	return self.findOid(v.Oid, true)
 }
 
 /*
@@ -313,9 +302,15 @@ func (self *CassandraMetaStore) findUser(user string) (*meta.User, error) {
 	q := self.client.Query("select * from users where username = ?", user)
 	b := cqlr.BindQuery(q)
 	b.Scan(&mu)
+
+	if err := b.Close(); err != nil {
+		return nil, err
+	}
+
 	if mu.Name == "" {
 		return nil, meta.ErrUserNotFound
 	}
+
 	return &mu, nil
 }
 
@@ -355,6 +350,11 @@ func (self *CassandraMetaStore) Users() ([]*meta.User, error) {
 	for b.Scan(&mu) {
 		users = append(users, &mu)
 	}
+
+	if err := b.Close(); err != nil {
+		return nil, err
+	}
+
 	return users, nil
 }
 
@@ -376,7 +376,7 @@ func (self *CassandraMetaStore) Projects() ([]*meta.Project, error) {
 AddProject (create a new project using POST)
 */
 func (self *CassandraMetaStore) AddProject(name string) error {
-	return self.createProject(name)
+	return self.createProject(name, false)
 }
 
 /*
