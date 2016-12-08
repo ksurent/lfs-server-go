@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -18,6 +17,32 @@ import (
 	"github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
 )
+
+var (
+	lfsServer         *httptest.Server
+	testMetaStore     meta.GenericMetaStore
+	testContentStore  content.GenericContentStore
+	testUser          = "admin"
+	testPass          = "admin"
+	contentStr        = "this is my content"
+	contentSize       = int64(len(contentStr))
+	contentOid        = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
+	nonexistingOid    = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
+	noAuthcontent     = "Some content goes here"
+	noAuthContentSize = int64(len(noAuthcontent))
+	noAuthOid         = "4609ed10888c145d228409aa5587bab9fe166093bb7c155491a96d079c9149be"
+	extraRepo         = "mytestproject"
+	testRepo          = "repo"
+)
+
+var cfg = &config.Configuration{
+	Scheme:      "https",
+	Host:        "localhost",
+	Public:      false,
+	Ldap:        &config.LdapConfig{Enabled: false},
+	MetaDB:      "/tmp/lfs-server-go.db",
+	ContentPath: "/tmp/lfs-server-go-test",
+}
 
 func TestGetAuthed(t *testing.T) {
 	req, err := http.NewRequest("GET", lfsServer.URL+"/namespace/repo/objects/"+contentOid, nil)
@@ -303,68 +328,46 @@ func TestMediaTypesParsed(t *testing.T) {
 	}
 }
 
-var (
-	lfsServer         *httptest.Server
-	testMetaStore     meta.GenericMetaStore
-	testContentStore  content.GenericContentStore
-	testUser          = "admin"
-	testPass          = "admin"
-	testAuth          = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(testUser+":"+testPass)))
-	badAuth           = fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("azog:defiler")))
-	contentStr        = "this is my content"
-	contentSize       = int64(len(contentStr))
-	contentOid        = "f97e1b2936a56511b3b6efc99011758e4700d60fb1674d31445d1ee40b663f24"
-	nonexistingOid    = "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"
-	noAuthcontent     = "Some content goes here"
-	noAuthContentSize = int64(len(noAuthcontent))
-	noAuthOid         = "4609ed10888c145d228409aa5587bab9fe166093bb7c155491a96d079c9149be"
-	extraRepo         = "mytestproject"
-	testRepo          = "repo"
-)
-
-func baseURL() string {
-	return fmt.Sprintf("%s://%s", config.Config.Scheme, config.Config.Host)
-}
-
 func TestMain(m *testing.M) {
-	os.Remove("/tmp/lfs-server-go.db")
-	os.RemoveAll("/tmp/lfs-server-go-test")
+	os.Remove(cfg.MetaDB)
+	os.RemoveAll(cfg.ContentPath)
 
-	config.Config.Ldap.Enabled = false
+	logger.SetOutput(ioutil.Discard)
+
 	var err error
-	testMetaStore, err = boltdb.NewMetaStore("/tmp/lfs-server-go.db")
+
+	testMetaStore, err = boltdb.NewMetaStore(cfg.MetaDB)
 	if err != nil {
 		fmt.Printf("Error creating meta store: %s", err)
 		os.Exit(1)
 	}
 
-	testContentStore, err = fs.NewContentStore("/tmp/lfs-server-go-test")
+	testContentStore, err = fs.NewContentStore(cfg.ContentPath)
 	if err != nil {
 		fmt.Printf("Error creating content store: %s", err)
 		os.Exit(1)
 	}
 
-	if err := seedMetaStore(); err != nil {
+	if err = seedMetaStore(); err != nil {
 		fmt.Printf("Error seeding meta store: %s", err)
 		os.Exit(1)
 	}
 
-	if err := seedContentStore(); err != nil {
+	if err = seedContentStore(); err != nil {
 		fmt.Printf("Error seeding content store: %s", err)
 		os.Exit(1)
 	}
 
-	app := NewApp(testContentStore, testMetaStore)
-	lfsServer = httptest.NewServer(app)
+	app := NewApp(cfg, testContentStore, testMetaStore)
 
-	logger.SetOutput(ioutil.Discard)
+	lfsServer = httptest.NewServer(app)
 
 	ret := m.Run()
 
 	lfsServer.Close()
 	testMetaStore.Close()
-	os.Exit(ret)
 
+	os.Exit(ret)
 }
 
 func seedMetaStore() error {
@@ -374,10 +377,9 @@ func seedMetaStore() error {
 	}
 
 	rv := &meta.RequestVars{
-		Authorization: testAuth,
-		Oid:           contentOid,
-		Size:          contentSize,
-		Repo:          testRepo,
+		Oid:  contentOid,
+		Size: contentSize,
+		Repo: testRepo,
 	}
 
 	if _, err := testMetaStore.Put(rv); err != nil {
@@ -392,10 +394,11 @@ func seedMetaStore() error {
 
 func seedContentStore() error {
 	m := &meta.Object{Oid: contentOid, Size: contentSize}
-	buf := bytes.NewBuffer([]byte(contentStr))
-	if err := testContentStore.Put(m, buf); err != nil {
-		return err
-	}
+	buf := bytes.NewBufferString(contentStr)
 
-	return nil
+	return testContentStore.Put(m, buf)
+}
+
+func baseURL() string {
+	return fmt.Sprintf("%s://%s", cfg.Scheme, cfg.Host)
 }

@@ -37,14 +37,19 @@ type link struct {
 
 // App links a Router, ContentStore, and MetaStore to provide the LFS server.
 type App struct {
+	config       *config.Configuration
 	router       *mux.Router
 	contentStore content.GenericContentStore
 	metaStore    meta.GenericMetaStore
 }
 
 // NewApp creates a new App using the ContentStore and MetaStore provided
-func NewApp(c content.GenericContentStore, m meta.GenericMetaStore) *App {
-	app := &App{contentStore: c, metaStore: m}
+func NewApp(cfg *config.Configuration, c content.GenericContentStore, m meta.GenericMetaStore) *App {
+	app := &App{
+		config:       cfg,
+		contentStore: c,
+		metaStore:    m,
+	}
 
 	r := mux.NewRouter()
 
@@ -61,15 +66,13 @@ func NewApp(c content.GenericContentStore, m meta.GenericMetaStore) *App {
 	add(r, route, app.GetContentHandler, downloadResponse).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
 	add(r, route, app.PutHandler, uploadResponse).Methods("PUT").MatcherFunc(ContentMatcher)
 
-	app.addMgmt(r)
-
 	app.router = r
 
 	return app
 }
 
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !config.Config.IsPublic() {
+	if !a.config.IsPublic() {
 		ok, err := a.authenticate(r)
 		if err != nil {
 			logger.Log(err)
@@ -95,11 +98,11 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) Serve() error {
 	srv := &http.Server{
-		Addr:    config.Config.Listen,
+		Addr:    a.config.Listen,
 		Handler: a,
 	}
 
-	if config.Config.UseTLS() {
+	if a.config.UseTLS() {
 		logger.Log("Using TLS")
 
 		tlsCfg := &tls.Config{
@@ -107,7 +110,7 @@ func (a *App) Serve() error {
 			Certificates: make([]tls.Certificate, 1),
 		}
 
-		if pair, err := tls.LoadX509KeyPair(config.Config.Cert, config.Config.Key); err == nil {
+		if pair, err := tls.LoadX509KeyPair(a.config.Cert, a.config.Key); err == nil {
 			tlsCfg.Certificates[0] = pair
 		} else {
 			logger.Fatal(err)
@@ -313,15 +316,15 @@ func (a *App) Represent(rv *meta.RequestVars, m *meta.Object, download, upload, 
 	}
 
 	if download {
-		rep.Links["download"] = &link{Href: rv.ObjectLink(), Header: header}
+		rep.Links["download"] = &link{Href: rv.ObjectLink(a.config.Scheme, a.config.Host), Header: header}
 	}
 
 	if upload {
-		rep.Links["upload"] = &link{Href: rv.ObjectLink(), Header: header}
+		rep.Links["upload"] = &link{Href: rv.ObjectLink(a.config.Scheme, a.config.Host), Header: header}
 	}
 
 	if verify {
-		rep.Links["verify"] = &link{Href: rv.VerifyLink(), Header: header}
+		rep.Links["verify"] = &link{Href: rv.VerifyLink(a.config.Scheme, a.config.Host), Header: header}
 	}
 
 	return rep
@@ -334,8 +337,8 @@ func (a *App) authenticate(r *http.Request) (bool, error) {
 		return false, nil
 	}
 
-	if config.Config.Ldap.Enabled {
-		return ldap.AuthenticateLdap(user, pass)
+	if a.config.Ldap.Enabled {
+		return ldap.AuthenticateLdap(a.config.Ldap, user, pass)
 	}
 
 	return a.metaStore.Authenticate(user, pass)

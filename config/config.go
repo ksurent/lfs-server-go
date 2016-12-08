@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -38,13 +37,6 @@ type LdapConfig struct {
 	BindPass        string `json:"bindpass"`
 }
 
-/*
-MySQLConfig (MySQL configuration struct)
-  => Host     :- MySQL host e.g 127.0.0.1:3306
-  => Database :- Name of the database default to lfs_server_go
-  => Username :- DB username
-  => Password :- DB password
-*/
 type MySQLConfig struct {
 	Host     string `json:"host"`
 	Database string `json:"database"`
@@ -70,8 +62,6 @@ type Configuration struct {
 	Host         string           `json:"host"`
 	UrlContext   string           `json:"url_context"`
 	ContentPath  string           `json:"content_path"`
-	AdminUser    string           `json:"admin_user"`
-	AdminPass    string           `json:"admin_pass"`
 	Cert         string           `json:"cert"`
 	Key          string           `json:"key"`
 	Scheme       string           `json:"scheme"`
@@ -89,42 +79,36 @@ type Configuration struct {
 }
 
 func (c *Configuration) IsHTTPS() bool {
-	return strings.Contains(Config.Scheme, "https")
+	return strings.Contains(c.Scheme, "https")
 }
 
 func (c *Configuration) UseTLS() bool {
-	return Config.Cert != "" && Config.Key != ""
+	return c.Cert != "" && c.Key != ""
 }
 
 func (c *Configuration) IsPublic() bool {
-	return Config.Public
+	return c.Public
 }
 
-// Config is the global app configuration
-//var Config = &Configuration{}
+func (c *Configuration) DumpConfig() map[string]interface{} {
+	return structs.Map(c)
+}
+
 var GoEnv = os.Getenv("GO_ENV")
-var Config = &Configuration{}
 
-// iterate thru config.ini and parse it
-// always called when initializing Config
-func init() {
-	configFile := os.Getenv("LFS_SERVER_GO_CONFIG")
-	if configFile == "" {
-		fmt.Println("LFS_SERVER_GO_CONFIG is not set, Using default config.ini")
-		configFile = "config.ini"
-	}
-
-	cfg, err := ini.Load(configFile)
+func NewFromFile(configFile string) (*Configuration, error) {
+	iniCfg, err := ini.Load(configFile)
 	if err != nil {
-		panic(fmt.Sprintf("unable to read config.ini, %v", err))
+		return nil, err
 	}
+
 	if GoEnv == "" {
 		GoEnv = "production"
 	}
 
 	//Force scheme to be a valid value
-	if cfg.Section("Main").Key("Scheme").String() != "" {
-		val := cfg.Section("Main").Key("Scheme").String()
+	if iniCfg.Section("Main").Key("Scheme").String() != "" {
+		val := iniCfg.Section("Main").Key("Scheme").String()
 		switch val {
 		case
 			"http", "https":
@@ -134,53 +118,11 @@ func init() {
 		}
 	}
 
-	awsConfig := &AwsConfig{
-		AccessKeyId:     "",
-		SecretAccessKey: "",
-		Region:          "USWest",
-		BucketName:      "lfs-server-go-objects",
-		BucketAcl:       "bucket-owner-full-control",
-		Enabled:         false,
-	}
-	ldapConfig := &LdapConfig{
-		Server:          "ldap://localhost:1389",
-		Base:            "dc=testers,c=test,o=company",
-		UserObjectClass: "person",
-		Enabled:         false,
-		UserCn:          "uid",
-		BindDn:          "",
-		BindPass:        "",
-	}
-	cassandraConfig := &CassandraConfig{
-		Hosts:        "localhost",
-		Keyspace:     "lfs_server_go",
-		ProtoVersion: 3,
-		Username:     "",
-		Password:     "",
-		Enabled:      false,
-	}
-	mysqlConfig := &MySQLConfig{
-		Host:     "",
-		Database: "lfs_server_go",
-		Username: "",
-		Password: "",
-		Enabled:  false,
-	}
-	graphiteConfig := &GraphiteConfig{
-		Endpoint:       "tcp://localhost:2003",
-		Prefix:         "",
-		AppendHostname: false,
-		Interval:       "60s",
-		Timeout:        "2s",
-		Enabled:        false,
-	}
-	configuration := &Configuration{
+	cfg := &Configuration{
 		Listen:       "tcp://:8080",
 		Host:         "localhost:8080",
 		UrlContext:   "",
 		ContentPath:  "lfs-content",
-		AdminUser:    "admin",
-		AdminPass:    "admin",
 		Cert:         "",
 		Key:          "",
 		Scheme:       "http",
@@ -189,22 +131,28 @@ func init() {
 		BackingStore: "bolt",
 		ContentStore: "filesystem",
 		NumProcs:     runtime.NumCPU(),
-		Ldap:         ldapConfig,
-		Aws:          awsConfig,
-		Cassandra:    cassandraConfig,
-		MySQL:        mysqlConfig,
-		Graphite:     graphiteConfig,
+		Ldap:         &LdapConfig{},
+		Aws:          &AwsConfig{},
+		Cassandra:    &CassandraConfig{},
+		MySQL:        &MySQLConfig{},
+		Graphite:     &GraphiteConfig{},
 	}
-	err = cfg.Section("Main").MapTo(configuration)
-	err = cfg.Section("Aws").MapTo(configuration.Aws)
-	err = cfg.Section("Ldap").MapTo(configuration.Ldap)
-	err = cfg.Section("Cassandra").MapTo(configuration.Cassandra)
-	err = cfg.Section("MySQL").MapTo(configuration.MySQL)
-	err = cfg.Section("Graphite").MapTo(configuration.Graphite)
-	Config = configuration
-}
 
-func (c *Configuration) DumpConfig() map[string]interface{} {
-	m := structs.Map(Config)
-	return m
+	for _, v := range []struct {
+		section string
+		dest    interface{}
+	}{
+		{"Main", cfg},
+		{"Aws", cfg.Aws},
+		{"Ldap", cfg.Ldap},
+		{"Cassandra", cfg.Cassandra},
+		{"MySQL", cfg.MySQL},
+		{"Graphite", cfg.Graphite},
+	} {
+		if err := iniCfg.Section(v.section).MapTo(v.dest); err != nil {
+			return nil, err
+		}
+	}
+
+	return cfg, nil
 }

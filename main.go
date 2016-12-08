@@ -45,35 +45,37 @@ var (
 
 var graphite *g2g.Graphite
 
-func findMetaStore() (meta.GenericMetaStore, error) {
-	logger.Log("Meta store: " + config.Config.BackingStore)
+func findMetaStore(cfg *config.Configuration) (meta.GenericMetaStore, error) {
+	logger.Log("Meta store: " + cfg.BackingStore)
 
-	switch config.Config.BackingStore {
+	switch cfg.BackingStore {
 	case "bolt":
-		return boltdb.NewMetaStore(config.Config.MetaDB)
+		return boltdb.NewMetaStore(cfg.MetaDB)
 	case "cassandra":
-		return cassandra.NewCassandraMetaStore()
+		return cassandra.NewCassandraMetaStore(cfg.Cassandra)
 	case "mysql":
-		return mysql.NewMySQLMetaStore()
+		return mysql.NewMySQLMetaStore(cfg.MySQL)
 	default:
-		return boltdb.NewMetaStore(config.Config.MetaDB)
+		return boltdb.NewMetaStore(cfg.MetaDB)
 	}
 }
 
-func findContentStore() (content.GenericContentStore, error) {
-	logger.Log("Content store: " + config.Config.ContentStore)
+func findContentStore(cfg *config.Configuration) (content.GenericContentStore, error) {
+	logger.Log("Content store: " + cfg.ContentStore)
 
-	switch config.Config.ContentStore {
+	switch cfg.ContentStore {
 	case "filestore":
-		return fs.NewContentStore(config.Config.ContentPath)
+		return fs.NewContentStore(cfg.ContentPath)
 	case "aws":
-		return aws.NewAwsContentStore()
+		return aws.NewAwsContentStore(cfg.Aws)
 	default:
-		return fs.NewContentStore(config.Config.ContentPath)
+		return fs.NewContentStore(cfg.ContentPath)
 	}
 }
+
 func main() {
 	showVersion := flag.Bool("version", false, "Print version and exit.")
+	configFile := flag.String("config", "", "Path to configuration.")
 
 	flag.Parse()
 
@@ -82,40 +84,50 @@ func main() {
 		os.Exit(0)
 	}
 
-	runtime.GOMAXPROCS(config.Config.NumProcs)
+	if *configFile == "" {
+		logger.Fatal("Need -config")
+	}
 
-	if config.Config.IsHTTPS() {
+	cfg, err := config.NewFromFile(*configFile)
+	if err != nil {
+		logger.Fatal("Failed to parse " + *configFile + ": " + err.Error())
+	}
+
+	runtime.GOMAXPROCS(cfg.NumProcs)
+
+	if cfg.IsHTTPS() {
 		logger.Log("Will generate https hrefs")
 	}
 
-	metaStore, err := findMetaStore()
+	metaStore, err := findMetaStore(cfg)
 	if err != nil {
 		logger.Fatal("Could not open the meta store: " + err.Error())
 	}
 
-	contentStore, err := findContentStore()
+	contentStore, err := findContentStore(cfg)
 	if err != nil {
 		logger.Fatal("Could not open the content store: " + err.Error())
 	}
 
-	if config.Config.Graphite.Enabled {
-		interval, err := time.ParseDuration(config.Config.Graphite.Interval)
+	if cfg.Graphite.Enabled {
+		interval, err := time.ParseDuration(cfg.Graphite.Interval)
 		if err != nil {
 			logger.Log("Failed to parse Graphite interval (" + err.Error() + "), defaulting to 60 seconds")
 			interval = 60 * time.Second
 		}
 
-		timeout, err := time.ParseDuration(config.Config.Graphite.Timeout)
+		timeout, err := time.ParseDuration(cfg.Graphite.Timeout)
 		if err != nil {
 			logger.Log("Failed to parse Graphite timeout (" + err.Error() + "), defaulting to 2 seconds")
 			timeout = 2 * time.Second
 		}
 
-		graphite = g2g.NewGraphite(config.Config.Graphite.Endpoint, interval, timeout)
+		graphite = g2g.NewGraphite(cfg.Graphite.Endpoint, interval, timeout)
+		defer graphite.Shutdown()
 
-		prefix := strings.Trim(config.Config.Graphite.Prefix, ".")
+		prefix := strings.Trim(cfg.Graphite.Prefix, ".")
 
-		if config.Config.Graphite.AppendHostname {
+		if cfg.Graphite.AppendHostname {
 			host, err := os.Hostname()
 			if err != nil {
 				logger.Log("Could not detect hostname: " + err.Error())
@@ -132,10 +144,8 @@ func main() {
 
 		setupGraphiteMetrics(prefix, graphite)
 
-		logger.Log("Graphite metrics prefix is " + prefix)
-		logger.Log("Sending metrics to " + config.Config.Graphite.Endpoint)
-
-		defer graphite.Shutdown()
+		logger.Log("Graphite metrics prefix: " + prefix)
+		logger.Log("Graphite endpoint: " + cfg.Graphite.Endpoint)
 	}
 
 	logger.Log("Version: " + BuildVersion)
@@ -146,7 +156,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	err = NewApp(contentStore, metaStore).Serve()
+	err = NewApp(cfg, contentStore, metaStore).Serve()
 	if err != nil {
 		logger.Fatal(err)
 	}
