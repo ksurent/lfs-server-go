@@ -27,8 +27,7 @@ func TestContentStorePut(t *testing.T) {
 		t.Fatalf("expected put to succeed, got: %s", err)
 	}
 
-	path := "content-store-test/6a/e8/a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72"
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if !contentStore.Exists(m) {
 		t.Fatalf("expected content to exist after putting")
 	}
 }
@@ -51,9 +50,8 @@ func TestContentStorePutHashMismatch(t *testing.T) {
 		t.Error("expected put with bogus content to fail")
 	}
 
-	path := "content-store-test/6a/e8/a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72"
-	if _, err := os.Stat(path); err == nil {
-		t.Fatalf("expected content to not exist after putting bogus content")
+	if contentStore.Exists(m) {
+		t.Error("expected content to not exist after putting bogus content")
 	}
 }
 
@@ -75,9 +73,8 @@ func TestContentStorePutSizeMismatch(t *testing.T) {
 		t.Error("expected put with bogus size to fail")
 	}
 
-	path := "content-store-test/6a/e8/a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72"
-	if _, err := os.Stat(path); err == nil {
-		t.Fatalf("expected content to not exist after putting bogus size")
+	if contentStore.Exists(m) {
+		t.Error("expected content to not exist after putting bogus size")
 	}
 }
 
