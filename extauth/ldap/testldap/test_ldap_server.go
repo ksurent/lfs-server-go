@@ -1,25 +1,22 @@
 // Just returns success when username = user and password = password
 // Otherwise, the response is a failure
 // used for testing
-package main
+package testldap
 
 import (
-	"github.com/nmcclain/ldap"
 	"log"
 	"net"
 	"strings"
+
+	"github.com/nmcclain/ldap"
 )
 
-func main() {
+func NewServer() *ldap.Server {
 	s := ldap.NewServer()
-	handler := ldapHandler{}
-	searchHandler := searchSimple{}
-	log.Println("Starting server on localhost:1389")
-	s.BindFunc("", handler)
-	s.SearchFunc("", searchHandler)
-	if err := s.ListenAndServe("localhost:1389"); err != nil {
-		log.Fatal("LDAP Server Failed: %s", err.Error())
-	}
+	s.BindFunc("", ldapHandler{})
+	s.SearchFunc("", searchSimple{})
+
+	return s
 }
 
 type ldapHandler struct {
