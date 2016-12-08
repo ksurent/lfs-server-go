@@ -7,8 +7,6 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"os"
-	"strings"
 
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
@@ -30,27 +28,23 @@ const (
 
 // AwsContentStore provides a simple file system based storage.
 type AwsContentStore struct {
-	client  *s3.S3
-	bucket  *s3.Bucket
-	authId  string
-	authKey string
-	acl     s3.ACL
+	bucket *s3.Bucket
+	acl    s3.ACL
 }
 
 // NewContentStore creates a ContentStore at the base directory.
-func NewAwsContentStore() (*AwsContentStore, error) {
-	os.Setenv("AWS_ACCESS_KEY_ID", config.Config.Aws.AccessKeyId)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", config.Config.Aws.SecretAccessKey)
-	auth, err := aws_.EnvAuth()
+func NewAwsContentStore(cfg *config.AwsConfig) (*AwsContentStore, error) {
+	auth, err := aws_.GetAuth(cfg.AccessKeyId, cfg.SecretAccessKey)
 	if err != nil {
-		logger.Log(err)
-		return &AwsContentStore{}, err
+		return nil, err
 	}
-	client := s3.New(auth, aws_.Regions[config.Config.Aws.Region])
-	bucket := client.Bucket(config.Config.Aws.BucketName)
-	self := &AwsContentStore{bucket: bucket, client: client}
+	client := s3.New(auth, aws_.Regions[cfg.Region])
+	bucket := client.Bucket(cfg.BucketName)
+	self := &AwsContentStore{
+		bucket: bucket,
+		acl:    s3.ACL(cfg.BucketAcl),
+	}
 	self.makeBucket()
-	self.setAcl()
 	return self, nil
 }
 
@@ -58,7 +52,6 @@ func NewAwsContentStore() (*AwsContentStore, error) {
 func (s *AwsContentStore) makeBucket() error {
 	buckets, err := s.bucket.ListBuckets()
 	if err != nil {
-		logger.Log(err)
 		return err
 	}
 	var exists bool
@@ -69,7 +62,7 @@ func (s *AwsContentStore) makeBucket() error {
 		}
 	}
 	if !exists {
-		err := s.bucket.PutBucket(s3.ACL(config.Config.Aws.BucketAcl))
+		err := s.bucket.PutBucket(s.acl)
 		return err
 	}
 	return nil
@@ -98,7 +91,6 @@ func (s *AwsContentStore) Put(m *meta.Object, r io.Reader) error {
 	hw := io.MultiWriter(hash)
 	written, err := io.Copy(hw, bytes.NewReader(buf))
 	if err != nil {
-		logger.Log(err)
 		return err
 	}
 	// Check that we've written out the entire file for computing the sha
@@ -112,7 +104,6 @@ func (s *AwsContentStore) Put(m *meta.Object, r io.Reader) error {
 	retStat := s.bucket.PutReader(path, bytes.NewReader(buf), m.Size, ContentType, s.acl)
 	k, kerr := s.getMetaData(m)
 	if kerr != nil {
-		logger.Log(kerr)
 		return errWriteS3
 	}
 	if k.Size != m.Size {
@@ -126,12 +117,8 @@ func (s *AwsContentStore) Exists(m *meta.Object) bool {
 	// returns a 404 error if its not there
 	_, err := s.bucket.GetKey(path)
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
-			return false
-		} else {
-			logger.Log(err)
-			return false
-		}
+		logger.Log(err)
+		return false
 	}
 	// if the object is not there, a 404 error is raised
 	return true
@@ -139,23 +126,4 @@ func (s *AwsContentStore) Exists(m *meta.Object) bool {
 
 func (s *AwsContentStore) Verify(m *meta.Object) error {
 	return errNotImplemented
-}
-
-func (s *AwsContentStore) setAcl() {
-	switch config.Config.Aws.BucketAcl {
-	case "private":
-		s.acl = s3.Private
-	case "public-read":
-		s.acl = s3.PublicRead
-	case "public-read-write":
-		s.acl = s3.PublicReadWrite
-	case "authenticated-read":
-		s.acl = s3.AuthenticatedRead
-	case "bucket-owner-read":
-		s.acl = s3.BucketOwnerRead
-	case "bucket-owner-full-control":
-		s.acl = s3.BucketOwnerFull
-	default:
-		s.acl = s3.Private
-	}
 }
