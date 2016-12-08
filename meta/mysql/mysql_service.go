@@ -11,17 +11,17 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func NewMySQLSession() (*sql.DB, error) {
-	err := validateConfig()
+func NewMySQLSession(cfg *config.MySQLConfig) (*sql.DB, error) {
+	err := validateConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("config: %s", err)
 	}
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s",
-		config.Config.MySQL.Username,
-		config.Config.MySQL.Password,
-		config.Config.MySQL.Host,
-		config.Config.MySQL.Database)
+		cfg.Username,
+		cfg.Password,
+		cfg.Host,
+		cfg.Database)
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -81,20 +81,20 @@ func createTables(db *sql.DB) error {
 	return tx.Commit()
 }
 
-func validateConfig() error {
-	if len(strings.TrimSpace(config.Config.MySQL.Host)) == 0 {
+func validateConfig(cfg *config.MySQLConfig) error {
+	if len(strings.TrimSpace(cfg.Host)) == 0 {
 		return errors.New("MySQL host is not specified")
 	}
 
-	if len(strings.TrimSpace(config.Config.MySQL.Database)) == 0 {
+	if len(strings.TrimSpace(cfg.Database)) == 0 {
 		return errors.New("MySQL database is not specified")
 	}
 
-	if len(strings.TrimSpace(config.Config.MySQL.Username)) == 0 {
+	if len(strings.TrimSpace(cfg.Username)) == 0 {
 		return errors.New("MySQL username is not specified")
 	}
 
-	if len(strings.TrimSpace(config.Config.MySQL.Password)) == 0 {
+	if len(strings.TrimSpace(cfg.Password)) == 0 {
 		return errors.New("MySQL password is not specified")
 	}
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/meta"
 )
 
@@ -13,8 +14,8 @@ type MySQLMetaStore struct {
 	client *sql.DB
 }
 
-func NewMySQLMetaStore() (*MySQLMetaStore, error) {
-	db, err := NewMySQLSession()
+func NewMySQLMetaStore(cfg *config.MySQLConfig) (*MySQLMetaStore, error) {
+	db, err := NewMySQLSession(cfg)
 	if err != nil {
 		return nil, err
 	}

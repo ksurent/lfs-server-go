@@ -1,7 +1,6 @@
 package mysql
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ksurent/lfs-server-go/config"
@@ -17,11 +16,11 @@ var (
 )
 
 func TestPutGet(t *testing.T) {
-	testMetaStore, err := setupMeta()
+	testMetaStore, teardown, err := setupMeta()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer teardownMeta(testMetaStore)
+	defer teardown()
 
 	rv := &meta.RequestVars{
 		Oid:  contentOid,
@@ -83,11 +82,11 @@ func TestPutGet(t *testing.T) {
 }
 
 func TestPutDuplicate(t *testing.T) {
-	testMetaStore, err := setupMeta()
+	testMetaStore, teardown, err := setupMeta()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer teardownMeta(testMetaStore)
+	defer teardown()
 
 	rv := &meta.RequestVars{
 		Oid:  contentOid,
@@ -116,11 +115,11 @@ func TestPutDuplicate(t *testing.T) {
 }
 
 func TestProjects(t *testing.T) {
-	testMetaStore, err := setupMeta()
+	testMetaStore, teardown, err := setupMeta()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer teardownMeta(testMetaStore)
+	defer teardown()
 
 	if err := testMetaStore.AddProject(contentRepo); err != nil {
 		t.Errorf("expected AddProject() to succeed, got: %s", err)
@@ -138,27 +137,24 @@ func TestAuthentication(t *testing.T) {
 	t.Skip("MySQL backend does not yet support user management and authentication")
 }
 
-func setupMeta() (*MySQLMetaStore, error) {
-	config.Config.MySQL = &config.MySQLConfig{
+func setupMeta() (*MySQLMetaStore, func(), error) {
+	metaStore, err := NewMySQLMetaStore(&config.MySQLConfig{
 		Enabled:  true,
 		Host:     "127.0.0.1:3306",
 		Username: "lfs_server",
 		Password: "pass123",
 		Database: "lfs_server_go",
-	}
-
-	metaStore, err := NewMySQLMetaStore()
+	})
 	if err != nil {
-		return nil, fmt.Errorf("error initializing test meta store: %s", err)
+		return nil, nil, err
 	}
 
-	metaStore.client.Exec("TRUNCATE TABLE oid_maps")
-	metaStore.client.Exec("TRUNCATE TABLE oids")
-	metaStore.client.Exec("TRUNCATE TABLE projects")
+	teardown := func() {
+		metaStore.client.Exec("TRUNCATE TABLE oid_maps")
+		metaStore.client.Exec("TRUNCATE TABLE oids")
+		metaStore.client.Exec("TRUNCATE TABLE projects")
+		metaStore.Close()
+	}
 
-	return metaStore, nil
-}
-
-func teardownMeta(metaStore *MySQLMetaStore) {
-	metaStore.Close()
+	return metaStore, teardown, nil
 }
