@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/gocql/gocql"
@@ -17,8 +18,8 @@ type CassandraMetaStore struct {
 
 var errUnsupported = errors.New("This feature is not supported by this backend")
 
-func NewCassandraMetaStore() (*CassandraMetaStore, error) {
-	sess, err := NewCassandraSession()
+func NewCassandraMetaStore(cfg *config.CassandraConfig) (*CassandraMetaStore, error) {
+	sess, err := NewCassandraSession(cfg)
 	if err != nil {
 		return nil, err
 	}

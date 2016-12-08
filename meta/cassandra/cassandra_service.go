@@ -14,14 +14,13 @@ type CassandraService struct {
 }
 
 // TODO: Add auth for cassandra
-func NewCassandraSession() (*CassandraService, error) {
-	cluster := gocql.NewCluster(config.Config.Cassandra.Hosts)
-	cluster.ProtoVersion = config.Config.Cassandra.ProtoVersion
+func NewCassandraSession(cfg *config.CassandraConfig) (*CassandraService, error) {
+	cluster := gocql.NewCluster(cfg.Hosts)
+	cluster.ProtoVersion = cfg.ProtoVersion
 
-	logger.Log("Connecting to " + config.Config.Cassandra.Hosts)
+	logger.Log("Cassandra hosts: " + cfg.Hosts)
 
-	keyspace := fmt.Sprintf("%s_%s", config.Config.Cassandra.Keyspace, config.GoEnv)
-	logger.Log("Using keyspace " + keyspace)
+	logger.Log("Cassandra keyspace: " + cfg.Keyspace)
 
 	q := fmt.Sprintf(`
 		create keyspace if not exists
@@ -30,7 +29,7 @@ func NewCassandraSession() (*CassandraService, error) {
 			'class': 'SimpleStrategy',
 			'replication_factor': 1
 		};
-	`, keyspace)
+	`, cfg.Keyspace)
 
 	session, err := cluster.CreateSession()
 	if err != nil {
@@ -43,7 +42,7 @@ func NewCassandraSession() (*CassandraService, error) {
 	}
 	session.Close()
 
-	cluster.Keyspace = keyspace
+	cluster.Keyspace = cfg.Keyspace
 	cluster.Consistency = gocql.Quorum
 
 	session, err = cluster.CreateSession()

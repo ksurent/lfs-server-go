@@ -1,7 +1,6 @@
 package cassandra
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ksurent/lfs-server-go/config"
@@ -17,11 +16,11 @@ var (
 )
 
 func TestPutGet(t *testing.T) {
-	testMetaStore, err := setupMeta()
+	testMetaStore, teardown, err := setupMeta()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer teardownMeta(testMetaStore)
+	defer teardown()
 
 	rv := &meta.RequestVars{
 		Oid:  contentOid,
@@ -83,11 +82,11 @@ func TestPutGet(t *testing.T) {
 }
 
 func TestPutDuplicate(t *testing.T) {
-	testMetaStore, err := setupMeta()
+	testMetaStore, teardown, err := setupMeta()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer teardownMeta(testMetaStore)
+	defer teardown()
 
 	rv := &meta.RequestVars{
 		Oid:  contentOid,
@@ -116,11 +115,11 @@ func TestPutDuplicate(t *testing.T) {
 }
 
 func TestProjects(t *testing.T) {
-	testMetaStore, err := setupMeta()
+	testMetaStore, teardown, err := setupMeta()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer teardownMeta(testMetaStore)
+	defer teardown()
 
 	if err := testMetaStore.AddProject(contentRepo); err != nil {
 		t.Errorf("expected AddProject() to succeed, got: %s", err)
@@ -135,11 +134,11 @@ func TestProjects(t *testing.T) {
 }
 
 func TestAuthentication(t *testing.T) {
-	testMetaStore, err := setupMeta()
+	testMetaStore, teardown, err := setupMeta()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer teardownMeta(testMetaStore)
+	defer teardown()
 
 	if err := testMetaStore.AddUser(testUser, testPass); err != nil {
 		t.Errorf("expected AddUser() to succeed, got: %s", err)
@@ -183,22 +182,22 @@ func TestAuthentication(t *testing.T) {
 	}
 }
 
-func setupMeta() (*CassandraMetaStore, error) {
-	metaStore, err := NewCassandraMetaStore()
+func setupMeta() (*CassandraMetaStore, func(), error) {
+	ks := "lfs_server_go_test"
+	metaStore, err := NewCassandraMetaStore(&config.CassandraConfig{
+		Enabled:      false,
+		Hosts:        "localhost:9042",
+		Keyspace:     ks,
+		ProtoVersion: 3,
+	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	metaStore.client.Query("TRUNCATE TABLE oids").Exec()
-	metaStore.client.Query("TRUNCATE TABLE projects").Exec()
-	metaStore.client.Query("TRUNCATE TABLE users").Exec()
+	teardown := func() {
+		metaStore.client.Query("drop keyspace " + ks).Exec()
+		metaStore.Close()
+	}
 
-	return metaStore, nil
-}
-
-func teardownMeta(metaStore *CassandraMetaStore) {
-	ks := fmt.Sprintf("%s_%s", config.Config.Cassandra.Keyspace, config.GoEnv)
-	metaStore.client.Query(fmt.Sprintf("drop keyspace %s;", ks)).Exec()
-
-	metaStore.Close()
+	return metaStore, teardown, nil
 }
