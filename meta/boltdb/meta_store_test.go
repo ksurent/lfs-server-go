@@ -117,6 +117,8 @@ func TestPutDuplicate(t *testing.T) {
 }
 
 func TestProjects(t *testing.T) {
+	// XXX this test is currently broken
+
 	testMetaStore, err := setupMeta()
 	if err != nil {
 		t.Fatal(err)
