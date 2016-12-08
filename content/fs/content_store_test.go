@@ -2,7 +2,6 @@ package fs
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -10,10 +9,11 @@ import (
 	"github.com/ksurent/lfs-server-go/meta"
 )
 
-var contentStore *ContentStore
-
 func TestContentStorePut(t *testing.T) {
-	setup()
+	contentStore, teardown, err := setup()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer teardown()
 
 	m := &meta.Object{
@@ -34,7 +34,10 @@ func TestContentStorePut(t *testing.T) {
 }
 
 func TestContentStorePutHashMismatch(t *testing.T) {
-	setup()
+	contentStore, teardown, err := setup()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer teardown()
 
 	m := &meta.Object{
@@ -42,10 +45,10 @@ func TestContentStorePutHashMismatch(t *testing.T) {
 		Size: 12,
 	}
 
-	b := bytes.NewBuffer([]byte("bogus content"))
+	b := bytes.NewBufferString("bogus content")
 
 	if err := contentStore.Put(m, b); err == nil {
-		t.Fatal("expected put with bogus content to fail")
+		t.Error("expected put with bogus content to fail")
 	}
 
 	path := "content-store-test/6a/e8/a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72"
@@ -55,7 +58,10 @@ func TestContentStorePutHashMismatch(t *testing.T) {
 }
 
 func TestContentStorePutSizeMismatch(t *testing.T) {
-	setup()
+	contentStore, teardown, err := setup()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer teardown()
 
 	m := &meta.Object{
@@ -63,10 +69,10 @@ func TestContentStorePutSizeMismatch(t *testing.T) {
 		Size: 14,
 	}
 
-	b := bytes.NewBuffer([]byte("test content"))
+	b := bytes.NewBufferString("test content")
 
 	if err := contentStore.Put(m, b); err == nil {
-		t.Fatal("expected put with bogus size to fail")
+		t.Error("expected put with bogus size to fail")
 	}
 
 	path := "content-store-test/6a/e8/a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72"
@@ -76,7 +82,10 @@ func TestContentStorePutSizeMismatch(t *testing.T) {
 }
 
 func TestContentStoreGet(t *testing.T) {
-	setup()
+	contentStore, teardown, err := setup()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer teardown()
 
 	m := &meta.Object{
@@ -102,48 +111,28 @@ func TestContentStoreGet(t *testing.T) {
 }
 
 func TestContentStoreGetNonExisting(t *testing.T) {
-	setup()
+	contentStore, teardown, err := setup()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer teardown()
 
-	_, err := contentStore.Get(&meta.Object{Oid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	_, err = contentStore.Get(&meta.Object{Oid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
 	if err == nil {
 		t.Fatalf("expected to get an error, but content existed")
 	}
 }
 
-func TestContentStoreExists(t *testing.T) {
-	setup()
-	defer teardown()
-
-	m := &meta.Object{
-		Oid:  "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72",
-		Size: 12,
-	}
-
-	b := bytes.NewBuffer([]byte("test content"))
-
-	if contentStore.Exists(m) {
-		t.Fatalf("expected content to not exist yet")
-	}
-
-	if err := contentStore.Put(m, b); err != nil {
-		t.Fatalf("expected put to succeed, got: %s", err)
-	}
-
-	if !contentStore.Exists(m) {
-		t.Fatalf("expected content to exist")
-	}
-}
-
-func setup() {
-	store, err := NewContentStore("content-store-test")
+func setup() (*ContentStore, func(), error) {
+	contentPath := "/tmp/content-store-test"
+	store, err := NewContentStore(contentPath)
 	if err != nil {
-		fmt.Printf("error initializing content store: %s\n", err)
-		os.Exit(1)
+		return nil, nil, err
 	}
-	contentStore = store
-}
 
-func teardown() {
-	os.RemoveAll("content-store-test")
+	teardown := func() {
+		os.RemoveAll(contentPath)
+	}
+
+	return store, teardown, nil
 }
