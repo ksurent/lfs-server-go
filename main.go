@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	BuildVersion = "0.1.0"
+	BuildVersion = "(development build)"
 )
 
 var (
