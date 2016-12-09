@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"expvar"
 	"flag"
 	"fmt"
@@ -56,7 +57,7 @@ func findMetaStore(cfg *config.Configuration) (meta.GenericMetaStore, error) {
 	case "mysql":
 		return mysql.NewMySQLMetaStore(cfg.MySQL)
 	default:
-		return boltdb.NewMetaStore(cfg.MetaDB)
+		return nil, errors.New("meta store not configured")
 	}
 }
 
@@ -69,7 +70,7 @@ func findContentStore(cfg *config.Configuration) (content.GenericContentStore, e
 	case "aws":
 		return aws.NewAwsContentStore(cfg.Aws)
 	default:
-		return fs.NewContentStore(cfg.ContentPath)
+		return nil, errors.New("content store not configured")
 	}
 }
 
