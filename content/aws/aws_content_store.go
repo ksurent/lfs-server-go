@@ -7,10 +7,10 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
-	"github.com/ksurent/lfs-server-go/logger"
 	"github.com/ksurent/lfs-server-go/meta"
 
 	aws_ "github.com/mitchellh/goamz/aws"
@@ -117,7 +117,7 @@ func (s *AwsContentStore) Exists(m *meta.Object) bool {
 	// returns a 404 error if its not there
 	_, err := s.bucket.GetKey(path)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 		return false
 	}
 	// if the object is not there, a 404 error is raised

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/content/fs"
-	"github.com/ksurent/lfs-server-go/logger"
 	"github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
 )
@@ -332,7 +332,7 @@ func TestMain(m *testing.M) {
 	os.Remove(cfg.MetaDB)
 	os.RemoveAll(cfg.ContentPath)
 
-	logger.SetOutput(ioutil.Discard)
+	log.SetOutput(ioutil.Discard)
 
 	var err error
 

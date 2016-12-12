@@ -5,6 +5,7 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/content/aws"
 	"github.com/ksurent/lfs-server-go/content/fs"
-	"github.com/ksurent/lfs-server-go/logger"
 	"github.com/ksurent/lfs-server-go/meta"
 	"github.com/ksurent/lfs-server-go/meta/boltdb"
 	"github.com/ksurent/lfs-server-go/meta/cassandra"
@@ -47,7 +47,7 @@ var (
 var graphite *g2g.Graphite
 
 func findMetaStore(cfg *config.Configuration) (meta.GenericMetaStore, error) {
-	logger.Log("Meta store: " + cfg.BackingStore)
+	log.Println("Meta store:", cfg.BackingStore)
 
 	switch cfg.BackingStore {
 	case "bolt":
@@ -62,7 +62,7 @@ func findMetaStore(cfg *config.Configuration) (meta.GenericMetaStore, error) {
 }
 
 func findContentStore(cfg *config.Configuration) (content.GenericContentStore, error) {
-	logger.Log("Content store: " + cfg.ContentStore)
+	log.Println("Content store:", cfg.ContentStore)
 
 	switch cfg.ContentStore {
 	case "filestore":
@@ -86,40 +86,40 @@ func main() {
 	}
 
 	if *configFile == "" {
-		logger.Fatal("Need -config")
+		log.Fatal("Need -config")
 	}
 
 	cfg, err := config.NewFromFile(*configFile)
 	if err != nil {
-		logger.Fatal("Failed to parse " + *configFile + ": " + err.Error())
+		log.Fatal("Failed to parse "+*configFile+":", err)
 	}
 
 	runtime.GOMAXPROCS(cfg.NumProcs)
 
 	if cfg.IsHTTPS() {
-		logger.Log("Will generate https hrefs")
+		log.Println("Will generate https hrefs")
 	}
 
 	metaStore, err := findMetaStore(cfg)
 	if err != nil {
-		logger.Fatal("Could not open the meta store: " + err.Error())
+		log.Println("Could not open the meta store:", err)
 	}
 
 	contentStore, err := findContentStore(cfg)
 	if err != nil {
-		logger.Fatal("Could not open the content store: " + err.Error())
+		log.Fatal("Could not open the content store:", err)
 	}
 
 	if cfg.Graphite.Enabled {
 		interval, err := time.ParseDuration(cfg.Graphite.Interval)
 		if err != nil {
-			logger.Log("Failed to parse Graphite interval (" + err.Error() + "), defaulting to 60 seconds")
+			log.Println("Failed to parse Graphite interval (" + err.Error() + "), defaulting to 60 seconds")
 			interval = 60 * time.Second
 		}
 
 		timeout, err := time.ParseDuration(cfg.Graphite.Timeout)
 		if err != nil {
-			logger.Log("Failed to parse Graphite timeout (" + err.Error() + "), defaulting to 2 seconds")
+			log.Println("Failed to parse Graphite timeout (" + err.Error() + "), defaulting to 2 seconds")
 			timeout = 2 * time.Second
 		}
 
@@ -131,8 +131,8 @@ func main() {
 		if cfg.Graphite.AppendHostname {
 			host, err := os.Hostname()
 			if err != nil {
-				logger.Log("Could not detect hostname: " + err.Error())
 				host = "localhost"
+				log.Printf("Could not detect hostname (%s), defaulting to %q", err, host)
 			}
 			host = strings.Replace(host, ".", "_", -1)
 
@@ -145,21 +145,21 @@ func main() {
 
 		setupGraphiteMetrics(prefix, graphite)
 
-		logger.Log("Graphite metrics prefix: " + prefix)
-		logger.Log("Graphite endpoint: " + cfg.Graphite.Endpoint)
+		log.Println("Graphite metrics prefix:", prefix)
+		log.Println("Graphite endpoint:", cfg.Graphite.Endpoint)
 	}
 
-	logger.Log("Version: " + BuildVersion)
+	log.Println("Version:", BuildVersion)
 
 	expvarVersion.Set(BuildVersion)
 
 	if err := pidfile.Write(); err != nil && !pidfile.IsNotConfigured(err) {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 
 	err = NewApp(cfg, contentStore, metaStore).Serve()
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 }
 

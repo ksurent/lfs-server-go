@@ -7,6 +7,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/ksurent/lfs-server-go/config"
 	"github.com/ksurent/lfs-server-go/content"
 	"github.com/ksurent/lfs-server-go/extauth/ldap"
-	"github.com/ksurent/lfs-server-go/logger"
 	"github.com/ksurent/lfs-server-go/meta"
 
 	"github.com/facebookgo/grace/gracehttp"
@@ -87,7 +87,7 @@ func (a *App) Serve() error {
 	}
 
 	if a.config.UseTLS() {
-		logger.Log("Using TLS")
+		log.Println("Using TLS")
 
 		tlsCfg := &tls.Config{
 			NextProtos:   []string{"http/1.1"},
@@ -97,7 +97,7 @@ func (a *App) Serve() error {
 		if pair, err := tls.LoadX509KeyPair(a.config.Cert, a.config.Key); err == nil {
 			tlsCfg.Certificates[0] = pair
 		} else {
-			logger.Fatal(err)
+			log.Fatal(err)
 		}
 
 		srv.TLSConfig = tlsCfg
@@ -111,13 +111,13 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	m, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 		return notFound(w, r)
 	}
 
 	reader, err := a.contentStore.Get(m)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 		return notFound(w, r)
 	}
 	defer reader.Close()
@@ -132,7 +132,7 @@ func (a *App) GetSearchHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	_, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 		return notFound(w, r)
 	}
 
@@ -144,7 +144,7 @@ func (a *App) GetMetaHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	m, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 		return notFound(w, r)
 	}
 
@@ -163,7 +163,7 @@ func (a *App) PostHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	m, err := a.metaStore.Put(rv)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 		return notFound(w, r)
 	}
 
@@ -196,7 +196,7 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) int {
 		// returns it if it does
 		m, err := a.metaStore.Put(object)
 		if err != nil {
-			logger.Log(err)
+			log.Println(err)
 			continue
 		}
 
@@ -229,19 +229,19 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	m, err := a.metaStore.GetPending(rv)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 		return notFound(w, r)
 	}
 
 	if err := a.contentStore.Put(m, r.Body); err != nil {
-		logger.Log(err)
+		log.Println(err)
 
 		return http.StatusInternalServerError
 	}
 
 	_, err = a.metaStore.Commit(rv)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 
 		return http.StatusInternalServerError
 	}
@@ -255,7 +255,7 @@ func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) int {
 	rv := unpack(r)
 	m, err := a.metaStore.Get(rv)
 	if err != nil {
-		logger.Log(err)
+		log.Println(err)
 		return notFound(w, r)
 	}
 
@@ -390,13 +390,13 @@ func unpackbatch(r *http.Request) *meta.BatchVars {
 }
 
 func logRequest(r *http.Request, status int) {
-	logger.Log(fmt.Sprintf(
+	log.Printf(
 		"rid=%s status=%d method=%s url=%s",
 		context.Get(r, "RequestID"),
 		status,
 		r.Method,
 		r.URL,
-	))
+	)
 }
 
 func writeStatus(w http.ResponseWriter, r *http.Request, status int) {
@@ -428,7 +428,7 @@ func (a *App) addEndpoint(path string, f func(http.ResponseWriter, *http.Request
 		if !a.config.IsPublic() {
 			ok, err := a.authenticate(r)
 			if err != nil {
-				logger.Log(err)
+				log.Println(err)
 				writeStatus(w, r, http.StatusInternalServerError)
 				return
 			}

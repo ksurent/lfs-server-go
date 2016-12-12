@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/ksurent/lfs-server-go/config"
-	"github.com/ksurent/lfs-server-go/logger"
 
 	"github.com/gocql/gocql"
 )
@@ -17,10 +16,6 @@ type CassandraService struct {
 func NewCassandraSession(cfg *config.CassandraConfig) (*CassandraService, error) {
 	cluster := gocql.NewCluster(cfg.Hosts)
 	cluster.ProtoVersion = cfg.ProtoVersion
-
-	logger.Log("Cassandra hosts: " + cfg.Hosts)
-
-	logger.Log("Cassandra keyspace: " + cfg.Keyspace)
 
 	q := fmt.Sprintf(`
 		create keyspace if not exists
