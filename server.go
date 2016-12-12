@@ -49,42 +49,26 @@ func NewApp(cfg *config.Configuration, c content.GenericContentStore, m meta.Gen
 		config:       cfg,
 		contentStore: c,
 		metaStore:    m,
+		router:       mux.NewRouter(),
 	}
 
-	r := mux.NewRouter()
+	app.router.HandleFunc("/debug/vars", app.DebugHandler).Methods("GET")
 
-	r.HandleFunc("/debug/vars", app.DebugHandler).Methods("GET")
-
-	add(r, "/{namespace}/{repo}/objects/batch", app.BatchHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
-	add(r, "/{namespace}/{repo}/objects", app.PostHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
-	add(r, "/search/{oid}", app.GetSearchHandler, metaResponse).Methods("GET")
-	add(r, "/{namespace}/{repo}/verify", app.VerifyHandler, metaResponse).Methods("POST").MatcherFunc(ContentMatcher)
+	app.addEndpoint("/{namespace}/{repo}/objects/batch", app.BatchHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
+	app.addEndpoint("/{namespace}/{repo}/objects", app.PostHandler, metaResponse).Methods("POST").MatcherFunc(MetaMatcher)
+	app.addEndpoint("/search/{oid}", app.GetSearchHandler, metaResponse).Methods("GET")
+	app.addEndpoint("/{namespace}/{repo}/verify", app.VerifyHandler, metaResponse).Methods("POST").MatcherFunc(ContentMatcher)
 
 	route := "/{namespace}/{repo}/objects/{oid}"
 
-	add(r, route, app.GetMetaHandler, metaResponse).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
-	add(r, route, app.GetContentHandler, downloadResponse).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
-	add(r, route, app.PutHandler, uploadResponse).Methods("PUT").MatcherFunc(ContentMatcher)
-
-	app.router = r
+	app.addEndpoint(route, app.GetMetaHandler, metaResponse).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
+	app.addEndpoint(route, app.GetContentHandler, downloadResponse).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
+	app.addEndpoint(route, app.PutHandler, uploadResponse).Methods("PUT").MatcherFunc(ContentMatcher)
 
 	return app
 }
 
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !a.config.IsPublic() {
-		ok, err := a.authenticate(r)
-		if err != nil {
-			logger.Log(err)
-			writeStatus(w, r, http.StatusInternalServerError)
-			return
-		}
-		if !ok {
-			requireAuth(w, r)
-			return
-		}
-	}
-
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err == nil {
@@ -439,12 +423,25 @@ func requireAuth(w http.ResponseWriter, r *http.Request) int {
 	return http.StatusUnauthorized
 }
 
-func add(r *mux.Router, path string, f func(http.ResponseWriter, *http.Request) int, exp *expvar.Map) *mux.Route {
+func (a *App) addEndpoint(path string, f func(http.ResponseWriter, *http.Request) int, exp *expvar.Map) *mux.Route {
 	wrapped := func(w http.ResponseWriter, r *http.Request) {
+		if !a.config.IsPublic() {
+			ok, err := a.authenticate(r)
+			if err != nil {
+				logger.Log(err)
+				writeStatus(w, r, http.StatusInternalServerError)
+				return
+			}
+			if !ok {
+				requireAuth(w, r)
+				return
+			}
+		}
+
 		status := f(w, r)
 		logRequest(r, status)
 		go exp.Add(strconv.Itoa(status), 1)
 	}
 
-	return r.HandleFunc(path, wrapped)
+	return a.router.HandleFunc(path, wrapped)
 }
